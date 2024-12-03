@@ -14,7 +14,8 @@ import numpy as np
 import gc
 
 from utility import *
-from classes import ClassificationResult
+from signalearn.classes import ClassificationResult
+from signalearn.utility import *
 
 def calculate_folds(length):
     return min(10, max(3, round((length / 100) ** 0.5)))
@@ -139,8 +140,8 @@ def sum_confusion_matrices(conf_matrices):
 def classify(
         points, 
         label, 
-        group, 
-        classifier, 
+        group = None, 
+        classifier = 'rf', 
         display_results=True, 
         save_results=True,
         cross_validate=False, 
@@ -173,7 +174,9 @@ def classify(
     unique_labels = encoder.classes_
     unique_labels_encoded = np.unique(labels_encoded)
 
-    result = ClassificationResult(point_type, unique_labels, xs[0])
+    attr_same, val_same = find_same_attribute(points)
+    name = f"{point_type}-{label}{'-'+group if group is not None else ''}-{classifier}{'-crossval' if cross_validate else ''}{'-tuning' if tune else ''}{('-'+attr_same+'='+val_same) if attr_same is not None and val_same is not None else ''}"
+    result = ClassificationResult(name, unique_labels, xs[0])
 
     nfolds = 1
     if cross_validate:
@@ -267,7 +270,8 @@ def classify(
 
     if save_results:
 
-        with open(f"results/results-{point_type}.txt", "w") as file:
+        os.makedirs('results', exist_ok=True)
+        with open(f"results/results-{name}.txt", "w") as file:
             file.write(result_string)
 
     if display_results:

@@ -1,6 +1,5 @@
 import os
 import numpy as np
-from classes import Breast_Point, Prostate_Point
 import csv
 from general_utility import *
 import pickle

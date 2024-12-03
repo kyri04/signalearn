@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from learning import reduce
+from signalearn.learning import reduce
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
@@ -93,7 +93,7 @@ def plot_probability_distribution_binary(result, class_name='Class', label_mappi
 
     plt.gca().tick_params(axis='y', which='both', left=False, labelleft=False)
 
-    plt.xlabel(f'Probability of {class_name + ' ' if class_name != '' else ''}{labels_unique[1]}')
+    plt.xlabel(f"Probability of {class_name + ' ' if class_name != '' else ''}{labels_unique[1]}")
     plt.ylabel('Probability Density')
     plt.title(f'{class_name} Probability Distribution')
 
@@ -211,14 +211,13 @@ def plot_pca(points, label=None, n_components=2):
 
     plt.show()
 
-def plot_point(point, title):
-    
+def plot_point(point):
     plt.figure()
 
     plt.xlabel(f'{point.xlabel} ({point.xunit})')
     plt.ylabel(f'{point.ylabel}')
     plt.plot(point.x, np.log1p(point.y))
 
-    plt.title(title)
+    plt.title(point.title)
 
     plt.show()
