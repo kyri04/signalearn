@@ -152,7 +152,7 @@ def classify(
 
     result_string = (
 
-        (f"TYPE: {point_type}") +
+        (f"TYPE: {point_type}\n") +
         (f"LABELS: {label}\n" if label is not None else '') +
         (f"GROUP: {group}\n" if group is not None else '') +
         (f"CLASSIFIER: {classifier}\n" if classifier is not None else '') + '\n\n'
@@ -164,8 +164,13 @@ def classify(
     
     ys = [point.y for point in points]
     xs = [point.x for point in points]
+
+    if(isinstance(label, str)):
+        labels = np.array([getattr(point, label) for point in points], dtype=str)
+    if(isinstance(label, list)):
+        labels = np.array(["_".join(str(getattr(point, attr)) for attr in label) for point in points], dtype=str)
     
-    labels = np.array([getattr(point, label) for point in points], dtype=str)
+    # labels = np.array([getattr(point, label) for point in points], dtype=str)
     groups = np.array([getattr(point, group) for point in points], dtype=str) if group is not None else None
 
     ys_scaled = scale(ys)

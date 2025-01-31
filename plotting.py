@@ -155,7 +155,12 @@ def plot_pca(points, label=None, n_components=2):
     if n_components not in [2, 3]:
         raise ValueError("n_components must be either 2 or 3.")
     y = [point.y for point in points]
-    labels = [getattr(point, label) for point in points] if label else None
+
+    labels = None
+    if(isinstance(label, str)):
+        labels = [getattr(point, label) for point in points] if label else None
+    if(isinstance(label, list)):
+        labels = ["_".join(str(getattr(point, attr)) for attr in label) for point in points]
 
     if labels:
         unique_labels = list(set(labels))
@@ -216,8 +221,21 @@ def plot_point(point):
 
     plt.xlabel(f'{point.xlabel} ({point.xunit})')
     plt.ylabel(f'{point.ylabel}')
-    plt.plot(point.x, np.log1p(point.y))
+    plt.plot(point.x, point.y)
 
     plt.title(point.title)
 
+    plt.show()
+
+def plot_mean_distribution(points):
+    # Calculate the mean of y values for each point
+    means = [sum(point.y) / len(point.y) for point in points if point.y]
+
+    # Plot the distribution of mean values
+    plt.figure(figsize=(8, 6))
+    plt.hist(means, bins=5000, color='blue', alpha=0.7, edgecolor='black')
+    plt.title('Distribution of Mean Y Values')
+    plt.xlabel('Mean Y Value')
+    plt.ylabel('Frequency')
+    plt.grid(True)
     plt.show()

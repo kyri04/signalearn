@@ -105,3 +105,16 @@ def fourier(points):
         point.y = amplitudes
 
     return points
+
+def update_points(points, point_class, params = None):
+
+    new_points = []
+
+    for point in points:
+
+        new_params = point.__dict__
+        if params is not None: new_params.update(params)
+
+        new_points.append(point_class(new_params))
+        
+    return new_points
