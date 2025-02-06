@@ -13,9 +13,9 @@ from sklearn.metrics import confusion_matrix, classification_report
 import numpy as np
 import gc
 
-from utility import *
 from signalearn.classes import ClassificationResult
 from signalearn.utility import *
+from signalearn.general_utility import time
 
 def calculate_folds(length):
     return min(10, max(3, round((length / 100) ** 0.5)))
@@ -120,18 +120,38 @@ def calculate_metrics(conf_matrix):
     return accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall
 
 def display_confusion_matrix(conf_matrix, labels):
-    header_width = len(labels) * 6 - 1
+    # Determine the minimum column width.
+    # This is the max between the default width (5) and the length of the longest label.
+    col_width = max(5, max(len(str(label)) for label in labels))
+    
+    # For row headers we display "Actual " + label.
+    # Compute the maximum length of these row header strings.
+    row_header_width = max(len("Actual " + str(label)) for label in labels)
+    
     output = []
     
-    output.append(" " * 10 + "Predicted".center(header_width))
+    # Total width for the header (each column plus a separating space)
+    header_width = len(labels) * (col_width + 1) - 1
     
-    output.append(" " * 10 + " ".join(f"{label:^5}" for label in labels))
+    # First line: "Predicted" centered, with some left padding for the row headers.
+    output.append(" " * (row_header_width + 1) + "Predicted".center(header_width))
     
+    # Second line: predicted labels with proper spacing.
+    output.append(" " * (row_header_width + 1) +
+                  " ".join(f"{label:^{col_width}}" for label in labels))
+    
+    # Subsequent lines: each row with its row header and the matrix values.
     for i, label in enumerate(labels):
-        row = f"{'Actual ' + str(label):<10}" + " ".join(f"{conf_matrix[i, j]:^5}" for j in range(len(labels)))
-        output.append(row)
+        # Create a row header like "Actual X"
+        row_header = f"Actual {label}"
+        # Format each element in the row to have the same width.
+        row_values = " ".join(f"{conf_matrix[i, j]:^{col_width}}" 
+                              for j in range(len(labels)))
+        # Left-align the row header within its width and add the values.
+        output.append(f"{row_header:<{row_header_width}} " + row_values)
     
     return "\n".join(output)
+
 
 def sum_confusion_matrices(conf_matrices):
     overall_conf_matrix = np.sum(conf_matrices, axis=0)
@@ -276,7 +296,7 @@ def classify(
     if save_results:
 
         os.makedirs('results', exist_ok=True)
-        with open(f"results/results-{name}.txt", "w") as file:
+        with open(f"results/results-{name}_{time()}.txt", "w") as file:
             file.write(result_string)
 
     if display_results:

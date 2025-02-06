@@ -3,7 +3,7 @@ import numpy as np
 import csv
 from general_utility import *
 import pickle
-from scipy.signal import argrelextrema
+from sklearn.mixture import GaussianMixture
 import random
 from scipy.fft import *
 
@@ -62,34 +62,30 @@ def sample(points, f=0.05):
     
     return sampled_points
 
-def remove_empty(points):
+def remove_empty(points, func=np.mean, remove_below_threshold=True):
 
-    y = [point.y for point in points]
+    processed_ys = np.array([func(point.y) for point in points]).reshape(-1, 1)
+    
+    gmm = GaussianMixture(n_components=2, random_state=42)
+    gmm.fit(processed_ys)
+    
+    labels = gmm.predict(processed_ys)
+    
+    cluster_values = gmm.means_.flatten()
+    small_label = np.argmin(cluster_values)
+    large_label = np.argmax(cluster_values)
+    
+    remove_label = small_label
+    if remove_below_threshold == False:
+        remove_label = large_label
 
-    mean_ys = []
-    for i in range(len(y)):
-        mean_ys.append(np.mean(y[i]))
-
-    counts, bin_edges = np.histogram(mean_ys, bins=3000)
-    smoothed_counts = np.convolve(counts, np.ones(10)/10, mode='same')
-
-    minima_indices = argrelextrema(smoothed_counts, np.less)[0]
-
-    if len(minima_indices) > 0:
-        min_index = minima_indices[0]
-        threshold = bin_edges[min_index]
-    else:
-        threshold = np.min(mean_ys)
-
-    filtered_points = [point for point, mean_y in zip(points, mean_ys) if mean_y >= threshold]
-
+    filtered_points = [point for point, label in zip(points, labels) if label != remove_label]
+    
     original_count = len(points)
-    filtered_count = len(filtered_points)
-    removed_count = original_count - filtered_count
+    removed_count = original_count - len(filtered_points)
     removed_percentage = (removed_count / original_count) * 100 if original_count > 0 else 0
-
-    print(f"Removed {removed_percentage:.2f}% of points.")
-
+    print(f"Removed {removed_percentage:.2f}% of the data.")
+    
     return filtered_points
 
 def fourier(points):

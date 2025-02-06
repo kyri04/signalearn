@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from signalearn.learning import reduce
+from signalearn.general_utility import time
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
@@ -97,7 +98,7 @@ def plot_probability_distribution_binary(result, class_name='Class', label_mappi
     plt.ylabel('Probability Density')
     plt.title(f'{class_name} Probability Distribution')
 
-    plt.savefig(f"results/probabilities-distribution-{result.name}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_probability_distribution_multiclass(result):
@@ -134,7 +135,8 @@ def plot_probability_distribution_multiclass(result):
     plt.ylabel('Probability Density')
     plt.title('Class Probability Distribution')
 
-    plt.savefig(f"results/probabilities-distribution-{result.name}.png", dpi=300, bbox_inches='tight')
+    
+    plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_importances(result):
@@ -142,13 +144,14 @@ def plot_importances(result):
 
     best_index = result.scores.index(max(result.scores))
 
-    plt.plot(result.q_range, result.feature_importances[best_index])
+    plt.plot(result.x_range, result.feature_importances[best_index])
 
-    plt.xlabel(r'$Q$ ($\AA^{-1}$)')
+    plt.xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
     plt.ylabel('Importance')
     plt.title('Feature Importances')
 
-    plt.savefig(f"results/importances-{result.name}.png", dpi=300, bbox_inches='tight')
+    plt.tight_layout()
+    plt.savefig(f"results/feature-importances_{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_pca(points, label=None, n_components=2):
@@ -157,10 +160,14 @@ def plot_pca(points, label=None, n_components=2):
     y = [point.y for point in points]
 
     labels = None
+    savename = ""
     if(isinstance(label, str)):
         labels = [getattr(point, label) for point in points] if label else None
+        savename = label
     if(isinstance(label, list)):
         labels = ["_".join(str(getattr(point, attr)) for attr in label) for point in points]
+        savename = ""
+        for l in label: savename += f"-{l}"
 
     if labels:
         unique_labels = list(set(labels))
@@ -214,6 +221,8 @@ def plot_pca(points, label=None, n_components=2):
         )
         ax.add_artist(legend1)
 
+    plt.tight_layout()
+    plt.savefig(f"results/pca_label-{savename}_components-{str(n_components)}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_point(point):
@@ -225,17 +234,21 @@ def plot_point(point):
 
     plt.title(point.title)
 
+    plt.tight_layout()
+    plt.savefig(f"results/point_{point.filename}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_mean_distribution(points):
+def plot_distribution(points, func=np.mean):
     # Calculate the mean of y values for each point
-    means = [sum(point.y) / len(point.y) for point in points if point.y]
+    values = [func(point.y) for point in points if point.y]
 
     # Plot the distribution of mean values
     plt.figure(figsize=(8, 6))
-    plt.hist(means, bins=5000, color='blue', alpha=0.7, edgecolor='black')
-    plt.title('Distribution of Mean Y Values')
-    plt.xlabel('Mean Y Value')
+    plt.hist(values, bins=int(np.sqrt(len(values))), color='blue', alpha=0.7, edgecolor='black')
+    plt.xlabel(f'{func.__name__}(Y Value)')
     plt.ylabel('Frequency')
     plt.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(f"results/distribution_{func.__name__}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()

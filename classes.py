@@ -20,5 +20,3 @@ class ClassificationResult:
         self.class_probabilities.append(model.predict_proba(X_test))
         self.labels.extend(y_test)
         self.points.extend(points)
-
-    
