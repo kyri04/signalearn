@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from signalearn.learning import reduce
 from signalearn.general_utility import time
+from signalearn.utility import *
 from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
@@ -236,6 +237,40 @@ def plot_point(point):
 
     plt.tight_layout()
     plt.savefig(f"results/point_{point.filename}_{time()}.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_func(points, func=np.mean):
+    attr, first_val = find_same_attribute(points)
+    y = apply_func(points, func=func)
+
+    plt.figure()
+
+    plt.xlabel(f'{points[0].xlabel} ({points[0].xunit})')
+    plt.ylabel(f'{points[0].ylabel}')
+    plt.plot(points[0].x, y)
+
+    plt.title(f"{func.__name__.capitalize()} of Points with {attr}={first_val}")
+
+    plt.tight_layout()
+    plt.savefig(f"results/{func.__name__}_points_{attr}={first_val}_{time()}.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_func_difference(points_a, points_b, func=np.mean):
+    y_a = apply_func(points_a, func=func)
+    y_b = apply_func(points_b, func=func)
+
+    y = y_a-y_b
+
+    plt.figure()
+
+    plt.xlabel(f'{points_a[0].xlabel} ({points_a[0].xunit})')
+    plt.ylabel(f'{points_a[0].ylabel}')
+    plt.plot(points_a[0].x, y)
+
+    plt.title(f"{func.__name__.capitalize()} Difference")
+
+    plt.tight_layout()
+    plt.savefig(f"results/{func.__name__}_difference_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_distribution(points, func=np.mean):

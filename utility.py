@@ -44,7 +44,7 @@ def find_same_attribute(points):
     common_attrs = vars(points[0]).keys()
 
     for attr in common_attrs:
-        if attr == 'scan_type': continue
+        if attr in ['xlabel', 'ylabel', 'xunit', 'yunit', ]: continue
         first_val = getattr(points[0], attr)
         
         try:
@@ -62,7 +62,7 @@ def sample(points, f=0.05):
     
     return sampled_points
 
-def remove_empty(points, func=np.mean, remove_below_threshold=True):
+def remove_empty(points, func=np.mean, remove_below_threshold=True, return_empty=False):
 
     processed_ys = np.array([func(point.y) for point in points]).reshape(-1, 1)
     
@@ -79,14 +79,20 @@ def remove_empty(points, func=np.mean, remove_below_threshold=True):
     if remove_below_threshold == False:
         remove_label = large_label
 
-    filtered_points = [point for point, label in zip(points, labels) if label != remove_label]
+    # filtered_points = [point for point, label in zip(points, labels) if label != remove_label]
+
+    filtered_points = []
+    empty_points = []
+    for point, label in zip(points, labels):
+        if label != remove_label: filtered_points.append(point)
+        else: empty_points.append(point)
     
     original_count = len(points)
     removed_count = original_count - len(filtered_points)
     removed_percentage = (removed_count / original_count) * 100 if original_count > 0 else 0
     print(f"Removed {removed_percentage:.2f}% of the data.")
     
-    return filtered_points
+    return filtered_points, empty_points if return_empty else filtered_points
 
 def fourier(points):
 
@@ -101,6 +107,13 @@ def fourier(points):
         point.y = amplitudes
 
     return points
+
+def apply_func(points, func=np.mean):
+
+    ys = np.array([p.y for p in points])
+    y = func(ys, axis=0)
+
+    return y
 
 def update_points(points, point_class, params = None):
 
