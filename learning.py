@@ -2,7 +2,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from sklearn.model_selection import GroupKFold, KFold, train_test_split
+from sklearn.model_selection import GroupKFold, KFold, train_test_split, GroupShuffleSplit
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.tree import DecisionTreeClassifier
@@ -36,7 +36,7 @@ def encode(labels):
 def get_classifier(classify_method):
     classifiers = {
         'dt': DecisionTreeClassifier(random_state=42),
-        'rf': RandomForestClassifier(random_state=42, n_estimators=300, n_jobs=-1),
+        'rf': RandomForestClassifier(random_state=42, n_estimators=300, n_jobs=-1, max_depth=10),
         'svm': SVC(random_state=42, probability=True),
         'lr': LogisticRegression(random_state=42),
         'knn': KNeighborsClassifier(),
@@ -53,11 +53,13 @@ def get_param_grid(classify_method):
             'min_samples_leaf': [1, 2, 5],
         },
         'rf': {
-            'n_estimators': [50, 100, 200, 300],
+            'n_estimators': [300],
             'max_depth': [None, 10, 20, 50],
             'min_samples_split': [2, 5, 10],
             'min_samples_leaf': [1, 2, 5],
             'criterion': ['gini', 'entropy'],
+            'max_features': ['sqrt', 'log2', None, 0.2, 0.5, 1.0], 
+            'bootstrap': [True, False],
         },
         'svm': {
             'C': [0.1, 1, 10, 100],
@@ -160,146 +162,152 @@ def sum_confusion_matrices(conf_matrices):
 def classify(
         points, 
         label, 
-        group = None, 
-        classifier = 'rf', 
+        group=None, 
+        classifier='rf', 
         display_results=True, 
         save_results=True,
         cross_validate=False, 
+        test_size=0.2,
         tune=False
     ):
 
+    # Print initial configuration
     point_type = points[0].__class__.__name__.lower()
-
     result_string = (
-
-        (f"TYPE: {point_type}\n") +
+        f"TYPE: {point_type}\n" +
         (f"LABELS: {label}\n" if label is not None else '') +
         (f"GROUP: {group}\n" if group is not None else '') +
         (f"CLASSIFIER: {classifier}\n" if classifier is not None else '') + '\n\n'
-
     )
     print(result_string)
-
+    
     N = len(points)
+    ys = np.array([point.y for point in points])
+    xs = np.array([point.x for point in points])
     
-    ys = [point.y for point in points]
-    xs = [point.x for point in points]
-
-    if(isinstance(label, str)):
+    # Prepare labels based on input type
+    if isinstance(label, str):
         labels = np.array([getattr(point, label) for point in points], dtype=str)
-    if(isinstance(label, list)):
+    elif isinstance(label, list):
         labels = np.array(["_".join(str(getattr(point, attr)) for attr in label) for point in points], dtype=str)
+    else:
+        raise ValueError("label must be either a string or a list")
     
-    # labels = np.array([getattr(point, label) for point in points], dtype=str)
     groups = np.array([getattr(point, group) for point in points], dtype=str) if group is not None else None
 
+    # Scale and encode labels
     ys_scaled = scale(ys)
     labels_encoded, encoder = encode(labels)
-
     unique_labels = encoder.classes_
     unique_labels_encoded = np.unique(labels_encoded)
-
+    
     attr_same, val_same = find_same_attribute(points)
-    name = f"{point_type}-{label}{'-'+group if group is not None else ''}-{classifier}{'-crossval' if cross_validate else ''}{'-tuning' if tune else ''}{('-'+attr_same+'='+val_same) if attr_same is not None and val_same is not None else ''}"
+    name = (f"{point_type}-{label}{'-' + group if group is not None else ''}-"
+            f"{classifier}{'-crossval' if cross_validate else ''}"
+            f"{'-tuning' if tune else ''}"
+            f"{('-' + attr_same + '=' + val_same) if attr_same is not None and val_same is not None else ''}")
     result = ClassificationResult(name, unique_labels, xs[0])
-
-    nfolds = 1
+    
     if cross_validate:
-        cv_strategy = GroupKFold(n_splits=len(np.unique(groups))) if group is not None else KFold(n_splits=calculate_folds(N))
-        splits = cv_strategy.split(ys_scaled, labels_encoded, groups)
-        nfolds = cv_strategy.n_splits
+        if group is not None:
+            cv_strategy = GroupKFold(n_splits=len(np.unique(groups)))
+            splits = cv_strategy.split(ys_scaled, labels_encoded, groups)
+            nfolds = cv_strategy.n_splits
+
+            train_groups = set(groups[train_idx])
+            test_groups = set(groups[test_idx])
+            assert train_groups.isdisjoint(test_groups), "Data from the same group found in both training and testing sets!"
+        else:
+            nfolds = calculate_folds(N)
+            cv_strategy = KFold(n_splits=nfolds)
+            splits = cv_strategy.split(ys_scaled, labels_encoded)
     else:
-        test_size = 1 / len(np.unique(groups)) if group is not None else 0.2
-        train_idx, test_idx = train_test_split(
-            range(N), test_size=test_size, stratify=labels_encoded if group is None else None, random_state=42
-        )
+        # Use a 60/40 split
+        if group is not None:
+            gss = GroupShuffleSplit(test_size=test_size, random_state=42)
+            train_idx, test_idx = next(gss.split(np.arange(N), labels_encoded, groups))
+
+            train_groups = set(groups[train_idx])
+            test_groups = set(groups[test_idx])
+            assert train_groups.isdisjoint(test_groups), "Data from the same group found in both training and testing sets!"
+        else:
+            train_idx, test_idx = train_test_split(
+                range(N), test_size=test_size, stratify=labels_encoded, random_state=42
+            )
         splits = [(train_idx, test_idx)]
+        nfolds = 1
 
     conf_matrices = []
-
     count = 1
     for train_idx, test_idx in splits:
-        
         X_train, X_test = ys_scaled[train_idx], ys_scaled[test_idx]
         y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
-
         labels_same = np.all(y_test == y_test[0])
-
+    
         model = get_classifier(classifier)
         param_grid = get_param_grid(classifier)
-
+    
         if tune:
-            search = RandomizedSearchCV(model, param_distributions=param_grid, n_iter=20, scoring='accuracy', cv=3, random_state=42, n_jobs=-1, verbose=1)
+            search = RandomizedSearchCV(
+                model, param_distributions=param_grid, n_iter=20, scoring='accuracy',
+                cv=3, random_state=42, n_jobs=-1, verbose=1
+            )
             search.fit(X_train, y_train)
             model = search.best_estimator_
+            print(search.best_params_)
         else:
             model.fit(X_train, y_train)
             
         y_pred = model.predict(X_test)
-
         conf_matrix = confusion_matrix(y_test, y_pred, labels=unique_labels_encoded)
-        class_report = classification_report(y_test, y_pred, labels=unique_labels_encoded, zero_division=np.nan) if not labels_same else None
-
+        class_report = (classification_report(y_test, y_pred, labels=unique_labels_encoded, zero_division=np.nan)
+                        if not labels_same else None)
         accuracy, specificity, sensitivity, precision, recall = calculate_metrics(conf_matrix)
-
         conf_matrices.append(conf_matrix)
-        
-        result.add_model(
-            model, 
-            X_test, 
-            y_test,
-            accuracy,
-            np.array(points)[test_idx]
-        )
-
+    
+        result.add_model(model, X_test, y_test, accuracy, np.array(points)[test_idx])
+    
         mean_text = "Mean " if conf_matrix.shape[0] > 2 else ""
-        display = (
-
-            f"({count}/{nfolds})" + '\n' +
-            (f"GROUP: {groups[test_idx][0]}" + f" with labels {np.unique(labels[test_idx])}\n" if group is not None else '') +
+        split_display = (
+            f"({count}/{nfolds})\n" +
+            (f"GROUP: {groups[test_idx][0]} with labels {np.unique(labels[test_idx])}\n" if group is not None else '') +
             f"Accuracy: {accuracy * 100:.2f}%\n" +
             (f"{mean_text}Precision: {precision * 100:.2f}%\n" if not labels_same else '') +
             (f"{mean_text}Recall: {recall * 100:.2f}%\n" if not labels_same else '') +
             (f"{mean_text}Specificity: {specificity * 100:.2f}%\n" if not labels_same else '') +
-            (f"{mean_text}Sensitivity: {sensitivity * 100:.2f}%\n" if not labels_same else '') + "\n" +
+            (f"{mean_text}Sensitivity: {sensitivity * 100:.2f}%\n" if not labels_same else '') +
+            "\n" +
             display_confusion_matrix(conf_matrix, unique_labels) +
             "\n\n-------------------------------------\n\n"
-
         )
-        if nfolds > 1: result_string += display
-
+        if nfolds > 1:
+            result_string += split_display
         if display_results and cross_validate and nfolds > 1:
-            print(display)
-
+            print(split_display)
+    
         count += 1
-
         del X_train, X_test, y_train, y_test, y_pred, model
-        del accuracy, precision, recall, specificity, sensitivity, class_report, conf_matrix
         gc.collect()
-
+    
     conf_matrix_sum = sum_confusion_matrices(conf_matrices)
-    accuracy, specificity, sensitivity, precision, recall = calculate_metrics(conf_matrix_sum)
-
-    display = (
-
-        ("OVERALL RESULTS\n" if nfolds > 1 or cross_validate else 'RESULTS\n') + 
-        f"Accuracy: {accuracy * 100:.2f}%\n" +
-        (f"{mean_text}Precision: {precision * 100:.2f}%\n" if not labels_same else '') +
-        (f"{mean_text}Recall: {recall * 100:.2f}%\n" if not labels_same else '') +
-        (f"{mean_text}Specificity: {specificity * 100:.2f}%\n" if not labels_same else '') +
-        (f"{mean_text}Sensitivity: {sensitivity * 100:.2f}%\n" if not labels_same else '') + "\n" +
+    overall_accuracy, overall_specificity, overall_sensitivity, overall_precision, overall_recall = calculate_metrics(conf_matrix_sum)
+    overall_display = (
+        ("OVERALL RESULTS\n" if nfolds > 1 or cross_validate else 'RESULTS\n') +
+        f"Accuracy: {overall_accuracy * 100:.2f}%\n" +
+        (f"{mean_text}Precision: {overall_precision * 100:.2f}%\n" if not labels_same else '') +
+        (f"{mean_text}Recall: {overall_recall * 100:.2f}%\n" if not labels_same else '') +
+        (f"{mean_text}Specificity: {overall_specificity * 100:.2f}%\n" if not labels_same else '') +
+        (f"{mean_text}Sensitivity: {overall_sensitivity * 100:.2f}%\n" if not labels_same else '') +
+        "\n" +
         display_confusion_matrix(conf_matrix_sum, unique_labels)
-
     )
-    result_string += display
-
+    result_string += overall_display
+    
     if save_results:
-
         os.makedirs('results', exist_ok=True)
         with open(f"results/results-{name}_{time()}.txt", "w") as file:
             file.write(result_string)
-
     if display_results:
-        print(display)
-
+        print(overall_display)
+    
     return result

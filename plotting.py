@@ -7,6 +7,41 @@ from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
 
+# dark_colour = '#2B4867'
+dark_colour = '#5A2B66'
+# light_colour = "#6188B3"
+light_colour = '#A560B3'
+line_width = 2
+
+def paint_axis():
+
+    ax = plt.gca()
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    ax.spines['bottom'].set_color(dark_colour)  # Bottom axis line
+    ax.spines['bottom'].set_linewidth(line_width)  # Thicker bottom axis line
+    ax.spines['left'].set_color(dark_colour)    # Left axis line
+    ax.spines['left'].set_linewidth(line_width)  # Thicker left axis line
+    ax.spines['right'].set_color(dark_colour)    # Left axis line
+    ax.spines['right'].set_linewidth(line_width)  # Thicker left axis line
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_color(dark_colour)    # Left axis line
+    ax.spines['top'].set_linewidth(line_width)  # Thicker left axis line
+    ax.spines['top'].set_visible(False)
+
+    ax.spines['bottom'].set_linewidth(line_width)  # Thicker bottom axis line
+    ax.spines['left'].set_linewidth(line_width)  # Thicker left axis line Left axis line
+    ax.spines['right'].set_linewidth(line_width)  # Thicker left axis line
+    ax.spines['top'].set_linewidth(line_width)  # Thicker left axis line
+
+    ax.tick_params(axis='x', colors=dark_colour)  # X-axis ticks
+    ax.tick_params(axis='y', colors=dark_colour)  # Y-axis ticks
+
+    ax.xaxis.label.set_color(dark_colour)
+    ax.yaxis.label.set_color(dark_colour)
+    ax.title.set_color(dark_colour)
+
 def plot_probability_scatter(result, n_components = 2):
     fig = plt.figure()
     
@@ -140,12 +175,14 @@ def plot_probability_distribution_multiclass(result):
     plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_importances(result):
+def plot_importances(result, paint=False):
     plt.figure()
 
     best_index = result.scores.index(max(result.scores))
 
-    plt.plot(result.x_range, result.feature_importances[best_index])
+    plt.plot(result.x_range, result.feature_importances[best_index], color=light_colour if paint else None)
+
+    if paint: paint_axis()
 
     plt.xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
     plt.ylabel('Importance')
@@ -226,12 +263,12 @@ def plot_pca(points, label=None, n_components=2):
     plt.savefig(f"results/pca_label-{savename}_components-{str(n_components)}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_point(point):
+def plot_point(point, func=None):
     plt.figure()
 
     plt.xlabel(f'{point.xlabel} ({point.xunit})')
-    plt.ylabel(f'{point.ylabel}')
-    plt.plot(point.x, point.y)
+    plt.ylabel(f'{point.ylabel if func is None else func.__name__ + "(" + point.ylabel + ")"}')
+    plt.plot(point.x, point.y if func is None else func(point.y))
 
     plt.title(point.title)
 
@@ -241,7 +278,7 @@ def plot_point(point):
 
 def plot_func(points, func=np.mean):
     attr, first_val = find_same_attribute(points)
-    y = apply_func(points, func=func)
+    y = func_y(points, func=func)
 
     plt.figure()
 
@@ -256,8 +293,8 @@ def plot_func(points, func=np.mean):
     plt.show()
 
 def plot_func_difference(points_a, points_b, func=np.mean):
-    y_a = apply_func(points_a, func=func)
-    y_b = apply_func(points_b, func=func)
+    y_a = func_y(points_a, func=func)
+    y_b = func_y(points_b, func=func)
 
     y = y_a-y_b
 
@@ -275,7 +312,7 @@ def plot_func_difference(points_a, points_b, func=np.mean):
 
 def plot_distribution(points, func=np.mean):
     # Calculate the mean of y values for each point
-    values = [func(point.y) for point in points if point.y]
+    values = [func(point.y) for point in points if point.y is not None and len(point.y) > 0]
 
     # Plot the distribution of mean values
     plt.figure(figsize=(8, 6))

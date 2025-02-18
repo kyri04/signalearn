@@ -108,12 +108,19 @@ def fourier(points):
 
     return points
 
-def apply_func(points, func=np.mean):
+def func_y(points, func=np.mean):
 
     ys = np.array([p.y for p in points])
     y = func(ys, axis=0)
 
     return y
+
+def func_points(points, func=np.log):
+
+    for point in points:
+        point.y = func(point.y)
+
+    return points
 
 def update_points(points, point_class, params = None):
 
@@ -127,3 +134,22 @@ def update_points(points, point_class, params = None):
         new_points.append(point_class(new_params))
         
     return new_points
+
+import numpy as np
+from skimage.morphology import white_tophat, rectangle
+def tophat(y, selem_size=50):
+    """
+    Applies a morphological white top-hat transform to boost peaks.
+    
+    Parameters:
+        y (np.array): 1D array of intensity values.
+        selem_size (int): The size of the structuring element (adjust based on your data).
+        
+    Returns:
+        y_tophat (np.array): Signal with boosted peaks.
+    """
+    # Create a 1D structuring element.
+    # Here we use a rectangular (flat) structuring element.
+    selem = rectangle(1, selem_size)[0]  # rectangle returns a 2D array; extract the 1D row.
+    y_tophat = white_tophat(y, selem)
+    return y_tophat
