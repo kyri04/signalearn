@@ -36,7 +36,7 @@ def encode(labels):
 def get_classifier(classify_method):
     classifiers = {
         'dt': DecisionTreeClassifier(random_state=42),
-        'rf': RandomForestClassifier(random_state=42, n_estimators=300, n_jobs=-1, max_depth=10),
+        'rf': RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10, n_jobs=-1),
         'svm': SVC(random_state=42, probability=True),
         'lr': LogisticRegression(random_state=42),
         'knn': KNeighborsClassifier(),
@@ -92,6 +92,7 @@ def calculate_metrics(conf_matrix):
     sensitivity = []
     precision = []
     recall = []
+    f1_scores = []  # List to store F1 scores for each class
     
     total_tp = np.trace(conf_matrix)
     total_samples = conf_matrix.sum()
@@ -104,13 +105,20 @@ def calculate_metrics(conf_matrix):
         
         sens = tp / (tp + fn) if (tp + fn) > 0 else None
         sensitivity.append(sens)
-        recall.append(sens)
+        recall.append(sens)  # recall is the same as sensitivity
 
         spec = tn / (tn + fp) if (tn + fp) > 0 else None
         specificity.append(spec)
         
         prec = tp / (tp + fp) if (tp + fp) > 0 else None
         precision.append(prec)
+        
+        # Calculate F1 score if both precision and sensitivity are available
+        if prec is not None and sens is not None and (prec + sens) > 0:
+            f1 = 2 * (prec * sens) / (prec + sens)
+        else:
+            f1 = None
+        f1_scores.append(f1)
 
     accuracy = total_tp / total_samples if total_samples > 0 else None
 
@@ -118,8 +126,9 @@ def calculate_metrics(conf_matrix):
     mean_specificity = np.mean([val for val in specificity if val is not None]) if specificity else None
     mean_precision = np.mean([val for val in precision if val is not None]) if precision else None
     mean_recall = np.mean([val for val in recall if val is not None]) if recall else None
+    mean_f1 = np.mean([val for val in f1_scores if val is not None]) if f1_scores else None
 
-    return accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall
+    return accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall, mean_f1
 
 def display_confusion_matrix(conf_matrix, labels):
     # Determine the minimum column width.
@@ -153,7 +162,6 @@ def display_confusion_matrix(conf_matrix, labels):
         output.append(f"{row_header:<{row_header_width}} " + row_values)
     
     return "\n".join(output)
-
 
 def sum_confusion_matrices(conf_matrices):
     overall_conf_matrix = np.sum(conf_matrices, axis=0)
@@ -262,10 +270,10 @@ def classify(
         conf_matrix = confusion_matrix(y_test, y_pred, labels=unique_labels_encoded)
         class_report = (classification_report(y_test, y_pred, labels=unique_labels_encoded, zero_division=np.nan)
                         if not labels_same else None)
-        accuracy, specificity, sensitivity, precision, recall = calculate_metrics(conf_matrix)
+        accuracy, specificity, sensitivity, precision, recall, f1 = calculate_metrics(conf_matrix)
         conf_matrices.append(conf_matrix)
     
-        result.add_model(model, X_test, y_test, accuracy, np.array(points)[test_idx])
+        result.add_model(model, X_test, y_test, f1, np.array(points)[test_idx])
     
         mean_text = "Mean " if conf_matrix.shape[0] > 2 else ""
         split_display = (
@@ -276,6 +284,7 @@ def classify(
             (f"{mean_text}Recall: {recall * 100:.2f}%\n" if not labels_same else '') +
             (f"{mean_text}Specificity: {specificity * 100:.2f}%\n" if not labels_same else '') +
             (f"{mean_text}Sensitivity: {sensitivity * 100:.2f}%\n" if not labels_same else '') +
+            (f"{mean_text}F1: {f1:.2f}%\n" if not labels_same else '') +
             "\n" +
             display_confusion_matrix(conf_matrix, unique_labels) +
             "\n\n-------------------------------------\n\n"
@@ -290,7 +299,7 @@ def classify(
         gc.collect()
     
     conf_matrix_sum = sum_confusion_matrices(conf_matrices)
-    overall_accuracy, overall_specificity, overall_sensitivity, overall_precision, overall_recall = calculate_metrics(conf_matrix_sum)
+    overall_accuracy, overall_specificity, overall_sensitivity, overall_precision, overall_recall, overall_f1 = calculate_metrics(conf_matrix_sum)
     overall_display = (
         ("OVERALL RESULTS\n" if nfolds > 1 or cross_validate else 'RESULTS\n') +
         f"Accuracy: {overall_accuracy * 100:.2f}%\n" +
@@ -298,6 +307,7 @@ def classify(
         (f"{mean_text}Recall: {overall_recall * 100:.2f}%\n" if not labels_same else '') +
         (f"{mean_text}Specificity: {overall_specificity * 100:.2f}%\n" if not labels_same else '') +
         (f"{mean_text}Sensitivity: {overall_sensitivity * 100:.2f}%\n" if not labels_same else '') +
+        (f"{mean_text}F1: {overall_f1:.2f}\n" if not labels_same else '') +
         "\n" +
         display_confusion_matrix(conf_matrix_sum, unique_labels)
     )
@@ -311,3 +321,65 @@ def classify(
         print(overall_display)
     
     return result
+
+import matplotlib.pyplot as plt
+import random
+
+def performance_evolution(points, attr, steps=10):
+    """
+    Trains models with an increasing number of groups (based on the specified attribute)
+    and plots the resulting F1 score evolution.
+    
+    For example, if attr is "id_patient" and there are 200 unique patients, the function
+    will first train a model using points from the first 10 patients, then 20 patients,
+    and so on until all 200 patients are used.
+    
+    Args:
+        points (list): List of point objects.
+        attr (str): The attribute name used to group points (e.g. "id_patient").
+        steps (int): The increment in the number of groups for each evaluation (e.g. 10 patients per step).
+    
+    Returns:
+        tuple: Two lists containing the number of groups used and the corresponding F1 scores.
+    """
+    # Get unique group identifiers from the points using the specified attribute.
+    unique_groups = sorted(set(getattr(point, attr) for point in points))
+    total_groups = len(unique_groups)
+    
+    # If the step size is larger than the number of groups, adjust it.
+    if steps > total_groups:
+        steps = total_groups
+
+    # Create a list of group counts to evaluate.
+    group_counts = list(range(steps, total_groups + 1, steps))
+    # Ensure that the final step uses all groups.
+    if group_counts[-1] != total_groups:
+        group_counts.append(total_groups)
+    
+    f1_scores = []
+    
+    # For each group count, filter the points, train a model, and record the F1 score.
+    for num_groups in group_counts:
+        # Select the first num_groups from the sorted unique groups.
+        selected_groups = set(unique_groups[:num_groups])
+        # Filter points that belong to the selected groups.
+        subset = [p for p in points if getattr(p, attr) in selected_groups]
+        
+        # Train a model using the classify function (with display and saving disabled).
+        result = classify(subset, label='diagnosis', group='id_patient', display_results=False, save_results=False, cross_validate=False, tune=False)
+        
+        # Extract the F1 score from the classification result.
+        # When cross_validate is False, result.scores should contain a single value.
+        f1 = result.scores[0] if result.scores else None
+        f1_scores.append(f1)
+    
+    # Plot the performance evolution.
+    plt.figure()
+    plt.plot(group_counts, f1_scores, marker='o', linestyle='-')
+    plt.xlabel(f'Number of {attr} groups')
+    plt.ylabel('F1 Score')
+    plt.title(f'Performance Evolution by Increasing Number of {attr} Groups')
+    plt.grid(True)
+    plt.show()
+    
+    return group_counts, f1_scores

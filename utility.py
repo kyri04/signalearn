@@ -135,21 +135,54 @@ def update_points(points, point_class, params = None):
         
     return new_points
 
+def find_unique(points, attr):
+
+    if isinstance(attr, str):
+        unique_vals = set([getattr(point, attr) for point in points])
+    elif isinstance(attr, list):
+        unique_vals = set(["_".join(str(getattr(point, a)) for a in attr) for point in points])
+    else:
+        raise ValueError("label must be either a string or a list")
+
+    return unique_vals
+
+
 import numpy as np
-from skimage.morphology import white_tophat, rectangle
-def tophat(y, selem_size=50):
+from scipy.signal import find_peaks, peak_widths
+
+def smoothly_massively_amplify_peaks(y, amplification=10, sigma=10, height=None, distance=1):
     """
-    Applies a morphological white top-hat transform to boost peaks.
+    Detects peaks in the signal and smoothly amplifies them using a Gaussian multiplier.
+    
+    For each detected peak, the multiplier at index i is:
+    
+        multiplier(i) = 1 + (amplification - 1) * exp( - ( (i - peak_index)**2 / (2 * sigma**2) ) )
+    
+    The final boosting factor at each index is the maximum contribution from all peaks.
     
     Parameters:
         y (np.array): 1D array of intensity values.
-        selem_size (int): The size of the structuring element (adjust based on your data).
-        
+        amplification (float): The maximum multiplier at the peak (should be >= 1).
+        sigma (float): Standard deviation (in indices) of the Gaussian boost.
+        height (float or None): Minimum height of peaks to detect (passed to find_peaks).
+        distance (int): Minimum distance between peaks (passed to find_peaks).
+    
     Returns:
-        y_tophat (np.array): Signal with boosted peaks.
+        y_amplified (np.array): Signal with smoothly and massively amplified peaks.
     """
-    # Create a 1D structuring element.
-    # Here we use a rectangular (flat) structuring element.
-    selem = rectangle(1, selem_size)[0]  # rectangle returns a 2D array; extract the 1D row.
-    y_tophat = white_tophat(y, selem)
-    return y_tophat
+    indices = np.arange(len(y))
+    # Start with a baseline multiplier of 1 everywhere.
+    boost_weights = np.ones_like(y, dtype=float)
+    
+    # Detect peaks. Additional parameters (height, distance) can help focus on the right peaks.
+    peaks, _ = find_peaks(y, height=height, distance=distance)
+    
+    for peak in peaks:
+        # Compute a Gaussian boost centered at the peak.
+        gaussian_boost = 1 + (amplification - 1) * np.exp(-((indices - peak)**2) / (2 * sigma**2))
+        # Use the maximum multiplier if multiple peaks affect the same index.
+        boost_weights = np.maximum(boost_weights, gaussian_boost)
+    
+    # Apply the boost weights to the original signal.
+    y_amplified = y * boost_weights
+    return y_amplified
