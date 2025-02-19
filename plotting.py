@@ -175,7 +175,7 @@ def plot_probability_distribution_multiclass(result):
     plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_importances(result, paint=False):
+def plot_importances(result, paint=False, plot_mean=False):
     plt.figure()
 
     best_index = result.scores.index(max(result.scores))
@@ -185,6 +185,7 @@ def plot_importances(result, paint=False):
     if paint: paint_axis()
 
     plt.xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
+    plt.xlim(0.1,3.0)
     plt.ylabel('Importance')
     plt.title('Feature Importances')
 

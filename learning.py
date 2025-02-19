@@ -166,7 +166,7 @@ def display_confusion_matrix(conf_matrix, labels):
 def sum_confusion_matrices(conf_matrices):
     overall_conf_matrix = np.sum(conf_matrices, axis=0)
     return overall_conf_matrix
-
+from imblearn.over_sampling import RandomOverSampler
 def classify(
         points, 
         label, 
@@ -176,7 +176,8 @@ def classify(
         save_results=True,
         cross_validate=False, 
         test_size=0.2,
-        tune=False
+        tune=False,
+        oversample=False
     ):
 
     # Print initial configuration
@@ -251,7 +252,11 @@ def classify(
         X_train, X_test = ys_scaled[train_idx], ys_scaled[test_idx]
         y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
         labels_same = np.all(y_test == y_test[0])
-    
+
+        if oversample:
+            oversampler = RandomOverSampler(random_state=42)
+            X_train, y_train = oversampler.fit_resample(X_train, y_train)
+
         model = get_classifier(classifier)
         param_grid = get_param_grid(classifier)
     
