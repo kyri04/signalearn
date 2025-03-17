@@ -7,9 +7,9 @@ from matplotlib.colors import ListedColormap
 import seaborn as sns
 import pandas as pd
 
-# dark_colour = '#2B4867'
+#dark_colour = '#2B4867'
 dark_colour = '#5A2B66'
-# light_colour = "#6188B3"
+#light_colour = "#6188B3"
 light_colour = '#A560B3'
 line_width = 2
 
@@ -185,7 +185,6 @@ def plot_importances(result, paint=False, plot_mean=False):
     if paint: paint_axis()
 
     plt.xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
-    plt.xlim(0.1,3.0)
     plt.ylabel('Importance')
     plt.title('Feature Importances')
 
@@ -264,12 +263,14 @@ def plot_pca(points, label=None, n_components=2):
     plt.savefig(f"results/pca_label-{savename}_components-{str(n_components)}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_point(point, func=None):
-    plt.figure()
+def plot_point(point, func=None, paint=False):
+    plt.figure(figsize=(5,3))
 
     plt.xlabel(f'{point.xlabel} ({point.xunit})')
     plt.ylabel(f'{point.ylabel if func is None else func.__name__ + "(" + point.ylabel + ")"}')
-    plt.plot(point.x, point.y if func is None else func(point.y))
+    plt.plot(point.x, point.y if func is None else func(point.y), color=light_colour if paint else None)
+
+    if paint: paint_axis()
 
     plt.title(point.title)
 

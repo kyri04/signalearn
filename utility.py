@@ -22,9 +22,14 @@ def filter(points, attr, val):
 
     has = []
     hasnt = []
+
+    vals = val
+    if isinstance(val, str):
+        vals = [val]
+
     for point in points:
 
-        if val.lower() in getattr(point, attr).lower(): has.append(point)
+        if any(v.lower() in getattr(point, attr).lower() for v in val): has.append(point)
         else: hasnt.append(point)
 
     return has, hasnt
@@ -134,6 +139,14 @@ def update_points(points, point_class, params = None):
         new_points.append(point_class(new_params))
         
     return new_points
+
+def combine_vals(points, attr, vals, new_val):
+
+    for point in points:
+
+        if any(v.lower() in getattr(point, attr).lower() for v in vals): setattr(point, attr, new_val)
+        
+    return points
 
 def find_unique(points, attr):
 
