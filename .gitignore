@@ -1,10 +1,7 @@
-# Ignore everything
 *
 
-# Allow only specific file types and files in the root directory
 !/*.py
 !/.gitignore
 !/LICENSE
 
-# Ignore all subdirectories
 */
