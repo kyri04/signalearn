@@ -1,22 +1,42 @@
 class ClassificationResult:
 
-    def __init__(self, set_name, set_classes, set_x_range):
-        self.name = set_name
-        self.feature_importances = []
-        self.class_probabilities = []
-        self.labels = []
-        self.scores = []
-        self.points = []
-        self.classes = set_classes
-        self.x_range = set_x_range
+    def __init__(self, set_params, set_results, set_group_results=None):
+        self.params = set_params
+        self.results = set_results
+        self.group_results = set_group_results
 
-    def add_model(self, model, X_test, y_test, score, points):
+    def format_params(self):
+        lines = ["PARAMETERS:"]
+        for k, v in vars(self.params).items():
+            lines.append(f"{k}: {v}")
+        return "\n".join(lines)
 
-        if hasattr(model, 'feature_importances_'): self.feature_importances.append(getattr(model, 'feature_importances_'))
-        else: self.feature_importances.append(None)
-
-        self.scores.append(score)
-
-        self.class_probabilities.append(model.predict_proba(X_test))
-        self.labels.extend(y_test)
-        self.points.extend(points)
+    def format_results(self, results, title="RESULTS:"):
+        return (
+            title + "\n"
+            + f"Accuracy: {results.accuracy * 100:.2f}%\n"
+            + f"Precision: {results.precision * 100:.2f}%\n"
+            + f"Recall: {results.recall * 100:.2f}%\n"
+            + f"Specificity: {results.specificity * 100:.2f}%\n"
+            + f"Sensitivity: {results.sensitivity * 100:.2f}%\n"
+            + f"F1: {results.f1:.2f}\n\n"
+            + self.display_confusion_matrix(results.conf_matrix)
+            + "\n\n"
+        )
+    
+    def display_confusion_matrix(self, conf_matrix):
+        col_width = max(5, max(len(str(label)) for label in self.params.unique_labels))
+        row_header_width = max(len("Actual " + str(label)) for label in self.params.unique_labels)
+        output = []
+        header_width = len(self.params.unique_labels) * (col_width + 1) - 1
+        output.append(" " * (row_header_width + 1) + "Predicted".center(header_width))
+        output.append(" " * (row_header_width + 1) + " ".join(f"{label:^{col_width}}" for label in self.params.unique_labels))
+        for i, label in enumerate(self.params.unique_labels):
+            row_header = f"Actual {label}"
+            row_values = " ".join(f"{conf_matrix[i, j]:^{col_width}}" for j in range(len(self.params.unique_labels)))
+            output.append(f"{row_header:<{row_header_width}} " + row_values)
+        return "\n".join(output)
+    
+    def display_params(self): print(self.format_params())
+    def display_results(self): print(self.format_results(self.results, title="RESULTS:"))
+    def display_group_results(self): print(self.format_results(self.group_results, title="GROUP-LEVEL RESULTS:"))

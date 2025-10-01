@@ -1,198 +1,33 @@
+try:
+    from cuml.internals.sklearn import patch_sklearn
+    patch_sklearn()
+except Exception:
+    # cuml not installed or patch failed; proceed on CPU
+    pass
+
 import matplotlib.pyplot as plt
 import numpy as np
-from signalearn.learning import reduce
-from signalearn.general_utility import time
+from signalearn.learning_utility import reduce, scale
 from signalearn.utility import *
-from matplotlib.colors import ListedColormap
-import seaborn as sns
-import pandas as pd
+from sklearn.metrics import roc_curve, roc_auc_score
 
-#dark_colour = '#2B4867'
-dark_colour = '#5A2B66'
-#light_colour = "#6188B3"
-light_colour = '#A560B3'
-line_width = 2
-
-def paint_axis():
-
-    ax = plt.gca()
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-
-    ax.spines['bottom'].set_color(dark_colour)  # Bottom axis line
-    ax.spines['bottom'].set_linewidth(line_width)  # Thicker bottom axis line
-    ax.spines['left'].set_color(dark_colour)    # Left axis line
-    ax.spines['left'].set_linewidth(line_width)  # Thicker left axis line
-    ax.spines['right'].set_color(dark_colour)    # Left axis line
-    ax.spines['right'].set_linewidth(line_width)  # Thicker left axis line
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_color(dark_colour)    # Left axis line
-    ax.spines['top'].set_linewidth(line_width)  # Thicker left axis line
-    ax.spines['top'].set_visible(False)
-
-    ax.spines['bottom'].set_linewidth(line_width)  # Thicker bottom axis line
-    ax.spines['left'].set_linewidth(line_width)  # Thicker left axis line Left axis line
-    ax.spines['right'].set_linewidth(line_width)  # Thicker left axis line
-    ax.spines['top'].set_linewidth(line_width)  # Thicker left axis line
-
-    ax.tick_params(axis='x', colors=dark_colour)  # X-axis ticks
-    ax.tick_params(axis='y', colors=dark_colour)  # Y-axis ticks
-
-    ax.xaxis.label.set_color(dark_colour)
-    ax.yaxis.label.set_color(dark_colour)
-    ax.title.set_color(dark_colour)
-
-def plot_probability_scatter(result, n_components = 2):
-    fig = plt.figure()
-    
-    probabilities = np.vstack(result.class_probabilities)
-    labels = np.array(result.labels)
-
-    if len(result.classes) > 2: 
-        
-        probabilities = reduce(probabilities, n_components=n_components)
-        if n_components == 2:
-            # 2D Plot
-            scatter = plt.scatter(probabilities[:, 0], probabilities[:, 1], c=labels, cmap='viridis', alpha=0.6)
-            plt.xlabel('Principal Component 1')
-            plt.ylabel('Principal Component 2')
-            plt.title('2D Projection of Class Probabilities')
-            plt.colorbar(scatter, label='Class Labels')
-
-        elif n_components == 3:
-            # 3D Plot
-            ax = fig.add_subplot(111, projection='3d')
-            scatter = ax.scatter(probabilities[:, 0], probabilities[:, 1], probabilities[:, 2], 
-                                c=labels, cmap='viridis', alpha=0.6)
-            ax.set_xlabel('Principal Component 1')
-            ax.set_ylabel('Principal Component 2')
-            ax.set_zlabel('Principal Component 3')
-            ax.set_title('3D Projection of Class Probabilities')
-            fig.colorbar(scatter, label='Class Labels')
-
-    elif len(result.classes) == 2:
-
-        indices = np.arange(probabilities.shape[0])
-        np.random.shuffle(indices)
-
-        probabilities_shuffled = probabilities[indices]
-        labels_shuffled = labels[indices]
-
-        red_blue_cmap = ListedColormap(["blue", "red"])
-        scatter = plt.scatter(
-            np.arange(len(probabilities_shuffled[:, 1])), 
-            probabilities_shuffled[:, 1], 
-            c=labels_shuffled, 
-            cmap=red_blue_cmap,
-            alpha=0.6, 
-            label=result.classes[1]
-        )
-
-        plt.xlabel('Scan')
-        plt.ylabel(f'Probability of {result.classes[1]}')
-        plt.title('Class Probabilities')
-
-        plt.gca().xaxis.set_visible(False)
-        plt.tick_params(axis='x', which='both', bottom=False, top=False)
-
-    handles, _ = scatter.legend_elements()
-    class_legend = plt.legend(handles, result.classes, title="Classes", loc="upper right")
-    plt.gca().add_artist(class_legend)
-
-    plt.savefig(f"results/probabilities-scatter-{result.name}.png", dpi=300, bbox_inches='tight')
-    plt.show()
-
-def plot_probability_distribution_binary(result, class_name='Class', label_mapping=None):
-    plt.figure()
-    
-    probabilities = np.vstack(result.class_probabilities)
-    labels = np.array(result.labels)
-
-    decoded_labels = np.array([result.classes[label] for label in labels])
-
-    if label_mapping is not None:
-        mapped_labels = np.array([label_mapping.get(label, f"Unknown ({label})") for label in decoded_labels])
-        labels_unique = [label_mapping.get(label, f"Unknown ({label})") for label in result.classes]
-    else:
-        mapped_labels = decoded_labels
-        labels_unique = result.classes
-
-    data = pd.DataFrame({
-        "Probability": probabilities[:, 1],
-        class_name: mapped_labels
-    })
-
-    sns.kdeplot(data=data, x="Probability", hue=class_name, hue_order=labels_unique, common_norm=False, fill=True, alpha=0.5)
-
-    plt.xlim(-0.1, 1.1)
-    plt.gca().set_xticks(np.linspace(0, 1, 5))
-    plt.gca().set_xticklabels([f'{tick:.2f}' for tick in np.linspace(0, 1, 5)])
-
-    plt.gca().tick_params(axis='y', which='both', left=False, labelleft=False)
-
-    plt.xlabel(f"Probability of {class_name + ' ' if class_name != '' else ''}{labels_unique[1]}")
-    plt.ylabel('Probability Density')
-    plt.title(f'{class_name} Probability Distribution')
-
-    plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
-    plt.show()
-
-def plot_probability_distribution_multiclass(result):
-    plt.figure()
-
-    probabilities = np.vstack(result.class_probabilities)
-    labels = np.array(result.labels)
-
-    data = pd.DataFrame(probabilities, columns=result.classes)
-    data['True Label'] = [result.classes[label] for label in labels]
-
-    data_melted = data.melt(
-        id_vars='True Label',
-        var_name='Predicted Class',
-        value_name='Probability'
-    )
-
-    sns.kdeplot(
-        data=data_melted,
-        x="Probability",
-        hue="Predicted Class",
-        # multiple="stack",  # Show stacked KDEs for better separation
-        common_norm=False,
-        fill=True,
-        alpha=0.6
-    )
-
-    plt.xlim(-0.1, 1.1)
-    plt.gca().set_xticks(np.linspace(0, 1, 5))
-    plt.gca().set_xticklabels([f'{tick:.2f}' for tick in np.linspace(0, 1, 5)])
-    plt.gca().tick_params(axis='y', which='both', left=False, labelleft=False)
-
-    plt.xlabel('Predicted Probability')
-    plt.ylabel('Probability Density')
-    plt.title('Class Probability Distribution')
-
-    
-    plt.savefig(f"results/probabilities-distribution-{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
-    plt.show()
-
-def plot_importances(result, paint=False, plot_mean=False):
+def plot_importances(result):
+    plt.close('all')
     plt.figure()
 
     best_index = result.scores.index(max(result.scores))
 
-    plt.plot(result.x_range, result.feature_importances[best_index], color=light_colour if paint else None)
-
-    if paint: paint_axis()
+    plt.plot(result.x_range, result.feature_importances[best_index])
 
     plt.xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
     plt.ylabel('Importance')
-    plt.title('Feature Importances')
+    # plt.title('Feature Importances')
 
     plt.tight_layout()
-    plt.savefig(f"results/feature-importances_{result.name}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_pca(points, label=None, n_components=2):
+    plt.close('all')
     if n_components not in [2, 3]:
         raise ValueError("n_components must be either 2 or 3.")
     y = [point.y for point in points]
@@ -211,12 +46,12 @@ def plot_pca(points, label=None, n_components=2):
         unique_labels = list(set(labels))
         label_to_color = {label: idx for idx, label in enumerate(unique_labels)}
         colors = [label_to_color[label] for label in labels]
-        cmap = plt.cm.get_cmap('viridis', len(unique_labels))
+        cmap = plt.colormaps.get_cmap('viridis').resampled(len(unique_labels))
     else:
         colors = None
         cmap = None
 
-    y_reduced = reduce(y, n_components)  # Assuming reduce reduces dimensions to 2 or 3 as needed.
+    y_reduced = reduce(y, n_components)
 
     if n_components == 2:
         fig, ax = plt.subplots()
@@ -260,25 +95,56 @@ def plot_pca(points, label=None, n_components=2):
         ax.add_artist(legend1)
 
     plt.tight_layout()
-    plt.savefig(f"results/pca_label-{savename}_components-{str(n_components)}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_point(point, func=None, paint=False):
-    plt.figure(figsize=(5,3))
+def plot_point(point, func=None):
+    plt.close('all')
+
+    plt.gca().set_yticklabels([])
 
     plt.xlabel(f'{point.xlabel} ({point.xunit})')
-    plt.ylabel(f'{point.ylabel if func is None else func.__name__ + "(" + point.ylabel + ")"}')
-    plt.plot(point.x, point.y if func is None else func(point.y), color=light_colour if paint else None)
-
-    if paint: paint_axis()
-
-    plt.title(point.title)
+    plt.ylabel(point.ylabel if func is None else func.__name__ + ' ' + point.ylabel)
+    plt.plot(point.x, point.y if func is None else func(point.y))
 
     plt.tight_layout()
-    plt.savefig(f"results/point_{point.filename}_{time()}.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_scaled(points, idx=0):
+
+    ys_scaled = scale(np.array([point.y for point in points]))
+
+    plt.close('all')
+
+    plt.gca().set_yticklabels([])
+
+    plt.xlabel(f'{points[idx].xlabel} ({points[idx].xunit})')
+    plt.ylabel(f'Standardised {points[idx].ylabel}')
+    plt.plot(points[idx].x, ys_scaled[0])
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_points(points, func=None, offset=0.1):
+
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    for i, p in enumerate(points):
+        y = p.y if func is None else func(p.y)
+        if offset:
+            y = y + i * offset
+        ax.plot(p.x, y, alpha=0.7)
+
+    ax.set_yticks([])
+    ylab = p.ylabel if func is None else f"{func.__name__} {p.ylabel}"
+    ax.set_ylabel(ylab)
+    ax.set_xlabel(f'{points[0].xlabel} ({points[0].xunit})')
+    ax.margins(x=0)
+    fig.tight_layout()
     plt.show()
 
 def plot_func(points, func=np.mean):
+    plt.close('all')
     attr, first_val = find_same_attribute(points)
     y = func_y(points, func=func)
 
@@ -288,13 +154,13 @@ def plot_func(points, func=np.mean):
     plt.ylabel(f'{points[0].ylabel}')
     plt.plot(points[0].x, y)
 
-    plt.title(f"{func.__name__.capitalize()} of Points with {attr}={first_val}")
+    # plt.title(f"{func.__name__.capitalize()} of Points with {attr}={first_val}")
 
     plt.tight_layout()
-    plt.savefig(f"results/{func.__name__}_points_{attr}={first_val}_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_func_difference(points_a, points_b, func=np.mean):
+    plt.close('all')
     y_a = func_y(points_a, func=func)
     y_b = func_y(points_b, func=func)
 
@@ -306,23 +172,83 @@ def plot_func_difference(points_a, points_b, func=np.mean):
     plt.ylabel(f'{points_a[0].ylabel}')
     plt.plot(points_a[0].x, y)
 
-    plt.title(f"{func.__name__.capitalize()} Difference")
+    # plt.title(f"{func.__name__.capitalize()} Difference")
 
     plt.tight_layout()
-    plt.savefig(f"results/{func.__name__}_difference_{time()}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_distribution(points, func=np.mean):
+    plt.close('all')
     # Calculate the mean of y values for each point
     values = [func(point.y) for point in points if point.y is not None and len(point.y) > 0]
 
     # Plot the distribution of mean values
     plt.figure(figsize=(8, 6))
-    plt.hist(values, bins=int(np.sqrt(len(values))), color='blue', alpha=0.7, edgecolor='black')
-    plt.xlabel(f'{func.__name__}(Y Value)')
+    plt.hist(values, bins=int(np.sqrt(len(values))))
+    plt.xlabel(f'{func.__name__} {points[0].ylabel}')
     plt.ylabel('Frequency')
-    plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig(f"results/distribution_{func.__name__}_{time()}.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+def save_figure(filename, dpi=300, figsize=None):
+    fig = plt.gcf()
+    if(figsize != None): fig.set_size_inches(figsize)
+    fig.savefig(f"plots/{filename}", bbox_inches='tight', dpi=dpi)
+
+def plot_rocs(results):
+    plt.close('all')
+    valid = [r.group_results for r in results if (r.group_results.y_true is not None and r.group_results.y_score is not None)]
+
+    roc_data = []
+    for r in valid:
+        fpr, tpr, _ = roc_curve(r.y_true, r.y_score)
+        auc = roc_auc_score(r.y_true, r.y_score)
+        roc_data.append((auc, fpr, tpr))
+
+    roc_data.sort(key=lambda x: x[0])
+    worst_auc, worst_fpr, worst_tpr = roc_data[0]
+    best_auc,  best_fpr,  best_tpr  = roc_data[-1]
+
+    mean_grid = np.linspace(0.0, 1.0, 1001)
+    tprs_interp = []
+    aucs = []
+    for auc, fpr, tpr in roc_data:
+        tpr_interp = np.interp(mean_grid, fpr, tpr)
+        tpr_interp[0] = 0.0
+        tprs_interp.append(tpr_interp)
+        aucs.append(auc)
+    mean_tpr = np.mean(tprs_interp, axis=0)
+    mean_tpr[-1] = 1.0
+    mean_auc = np.trapz(mean_tpr, mean_grid)
+
+    plt.figure()
+    for auc, fpr, tpr in roc_data:
+        plt.plot(fpr, tpr, linewidth=0.8, alpha=0.2, color=(0.7, 0.7, 0.7))
+
+    plt.plot([0, 1], [0, 1], linestyle=':', label=f"Baseline AUC = 0.500", linewidth=1.0, color=(0.5, 0.5, 0.5))
+
+    plt.plot(best_fpr,  best_tpr,  linewidth=1.6, label=f"Best AUC = {best_auc:.3f}",  color='green')
+    plt.plot(worst_fpr, worst_tpr, linewidth=1.6, label=f"Worst AUC = {worst_auc:.3f}", color='red')
+
+    plt.plot(mean_grid, mean_tpr, linewidth=1.8, label=f"Mean AUC = {mean_auc:.3f}", color='black')
+
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.show()
+
+def plot_learning_curve(xs, scores, xlabel="Training Data Fraction", ylabel="Score"):
+    plt.close('all')
+    plt.figure()
+
+    plt.scatter(xs, scores)
+    plt.plot(xs, fit_spline(xs, scores)(xs), linestyle="--", color="black")
+
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+    plt.tight_layout()
     plt.show()
