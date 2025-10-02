@@ -1,0 +1,50 @@
+text.usetex: True
+text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}
+font.family: serif
+font.serif: Computer Modern
+savefig.bbox: tight
+
+axes.spines.right: False
+axes.spines.top: False
+
+savefig.format: pdf
+
+lines.linewidth: 0.8
+axes.linewidth: 0.5
+
+# --- Font and text ---
+axes.labelsize: 10          # axis label size
+axes.titlesize: 10          # title size (avoid too large)
+xtick.labelsize: 8
+ytick.labelsize: 8
+legend.fontsize: 8
+mathtext.fontset: cm        # consistent math text if LaTeX fails
+
+# --- Hide y-ticks and numbers but keep y-axis label ---
+ytick.left: False        # no tick marks on left
+ytick.right: False       # no tick marks on right
+ytick.labelleft: True   # hide tick labels
+ytick.labelright: False  # hide tick labels on right side
+
+# --- Remove tick marks on x but keep numbers + label ---
+xtick.top: False
+xtick.bottom: False      # remove bottom tick marks
+xtick.labelbottom: True  # keep numbers
+xtick.labeltop: False    # no labels on top
+
+xtick.major.pad: 0
+ytick.major.pad: 0
+
+# --- Legend ---
+legend.frameon: False       # cleaner legend
+legend.handlelength: 2
+legend.handletextpad: 0.5
+
+# --- Colors ---
+axes.prop_cycle: cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728'])
+
+# --- Crisp histogram bars (Rectangles are Patches) ---
+patch.edgecolor: white
+patch.force_edgecolor: True
+patch.linewidth: 0.5
+patch.facecolor: none          # outlines only; change to '#e0e0e0' for subtle fill
