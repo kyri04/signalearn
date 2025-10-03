@@ -5,6 +5,7 @@ except Exception:
     # cuml not installed or patch failed; proceed on CPU
     pass
 
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 from signalearn.learning_utility import reduce, scale
@@ -194,6 +195,7 @@ def plot_distribution(points, func=np.mean):
 def save_figure(filename, dpi=300, figsize=None):
     fig = plt.gcf()
     if(figsize != None): fig.set_size_inches(figsize)
+    os.makedirs('plots', exist_ok=True)
     fig.savefig(f"plots/{filename}", bbox_inches='tight', dpi=dpi)
 
 def plot_rocs(results):
