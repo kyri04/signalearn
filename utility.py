@@ -28,7 +28,7 @@ def filter(points, attr, val):
 
     for point in points:
 
-        if any(v.lower() in getattr(point, attr).lower() for v in val): has.append(point)
+        if any(v.lower() in getattr(point, attr).lower() for v in vals): has.append(point)
         else: hasnt.append(point)
 
     return has, hasnt
