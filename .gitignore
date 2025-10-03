@@ -4,9 +4,7 @@
 !/LICENSE
 !/.mplstyle
 
-# ignore subdirectories by default
 */
 
-# explicitly allow this folder and everything in it
 !/plot-styles/
 !/plot-styles/**
