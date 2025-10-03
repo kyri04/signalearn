@@ -18,18 +18,18 @@ def get_attribute(id, attr, map):
             return row[attr]
 
 def filter(points, attr, val):
-
-    has = []
-    hasnt = []
-
-    vals = val
     if isinstance(val, str):
-        vals = [val]
+        vals = [val.lower()]
+    else:
+        vals = [v.lower() for v in val]
 
+    has, hasnt = [], []
     for point in points:
-
-        if any(v.lower() in getattr(point, attr).lower() for v in vals): has.append(point)
-        else: hasnt.append(point)
+        attr_val = str(getattr(point, attr, "")).lower()
+        if any(v in attr_val for v in vals):
+            has.append(point)
+        else:
+            hasnt.append(point)
 
     return has, hasnt
 
