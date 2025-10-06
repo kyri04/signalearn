@@ -3,7 +3,7 @@ from signalearn.preprocess import sample
 from signalearn.classes import ClassificationResult
 from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
-from general_utility import cleanup
+from signalearn.general_utility import cleanup
 import numpy as np
 
 def classify(
