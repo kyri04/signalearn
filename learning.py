@@ -3,6 +3,7 @@ from signalearn.preprocess import sample
 from signalearn.classes import ClassificationResult
 from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
+from general_utility import cleanup
 import numpy as np
 
 def classify(
@@ -67,7 +68,7 @@ def classify(
         )
         group_results_ns = make_namespace(group_eval)
 
-    return ClassificationResult(
+    res = ClassificationResult(
         set_params=make_namespace({
             "label": label,
             "group": group,
@@ -92,6 +93,11 @@ def classify(
         }),
         set_group_results=group_results_ns
     )
+
+    del model, X_train, X_test, X_train_raw, X_test_raw, y_pred, y_score
+    cleanup()
+
+    return res
 
 def shuffle_classify(
     points, 

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import gc
 
 def name_from_path(filepath):
     return os.path.splitext(os.path.basename(filepath))[0]
@@ -21,4 +22,7 @@ def remove_trailing_letters(s):
     return s[:end_index]
 
 def time():
-    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S") 
+
+def cleanup():
+    gc.collect()

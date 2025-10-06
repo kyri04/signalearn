@@ -75,7 +75,7 @@ def get_classifier(method):
         "svm": SVC(random_state=42, probability=True),
         "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000),
         "knn": KNeighborsClassifier(),
-        # "gb": GradientBoostingClassifier(random_state=42),
+        "gb": GradientBoostingClassifier(random_state=42),
     }
     return classifiers[method]
 
