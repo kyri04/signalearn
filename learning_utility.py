@@ -23,7 +23,7 @@ def reduce(y, n_components=2):
 def encode(labels):
     encoder = LabelEncoder()
     encoded_labels = encoder.fit_transform(labels)
-    return xp.array(encoded_labels), encoder
+    return np.array(encoded_labels), encoder
 
 def prepare_labels(points, label):
     if isinstance(label, str):
