@@ -8,6 +8,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import confusion_matrix
 
 from collections import Counter
 from signalearn.classes import ClassificationResult
@@ -260,9 +261,6 @@ def _aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
 
 def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
                          agg='mean', threshold=0.8, proportion=0.3):
-
-    import numpy as np
-    from sklearn.metrics import confusion_matrix
 
     n_classes = len(unique_labels_encoded)
 
