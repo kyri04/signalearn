@@ -163,11 +163,11 @@ def learning_curve(
 
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_classify(
-                subset,
-                label,
-                group,
-                agg_group,
-                classifier,
+                subset=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
                 test_size=test_size,
                 balance=balance,
                 shuffles=shuffles_per_split,
@@ -183,11 +183,11 @@ def learning_curve(
             
         else:
             res = classify(
-                subset,
-                label,
-                group,
-                agg_group,
-                classifier,
+                points=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
                 test_size=test_size,
                 balance=balance,
                 split_state=split_state,
