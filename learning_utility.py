@@ -70,10 +70,10 @@ def standardize_train_test(X_train_raw, X_test_raw):
 def get_classifier(method):
     classifiers = {
         "dt": DecisionTreeClassifier(random_state=42),
-        "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10, n_jobs=-1),
+        "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10),
         "svm": SVC(random_state=42, probability=True),
-        "lr": LogisticRegression(random_state=42, n_jobs=-1, class_weight='balanced', max_iter=1000),
-        "knn": KNeighborsClassifier(n_jobs=-1),
+        "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000),
+        "knn": KNeighborsClassifier(),
         "gb": GradientBoostingClassifier(random_state=42),
     }
     return classifiers[method]
