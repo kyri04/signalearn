@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from collections import Counter
 from signalearn.classes import ClassificationResult
 
-from signalearn.xp import xp, asnumpy
+import numpy as np
 from signalearn.utility import *
 
 def reduce(y, n_components=2):
@@ -51,16 +51,16 @@ def build_name(point_type, label, group, classifier, attr_same, val_same):
 def get_single_split(N, y, groups, test_size=0.2, random_state=42):
     if groups is not None:
         gss = GroupShuffleSplit(test_size=test_size, random_state=random_state)
-        train_idx, test_idx = next(gss.split(xp.arange(N), y, groups))
+        train_idx, test_idx = next(gss.split(np.arange(N), y, groups))
     else:
         train_idx, test_idx = train_test_split(
-            xp.arange(N), test_size=test_size, stratify=y, random_state=random_state
+            np.arange(N), test_size=test_size, stratify=y, random_state=random_state
         )
     return train_idx, test_idx
 
 def scale(y):
     scaler = StandardScaler()
-    return xp.array(scaler.fit_transform(y))
+    return np.array(scaler.fit_transform(y))
 
 def standardize_train_test(X_train_raw, X_test_raw):
     scaler = StandardScaler().fit(X_train_raw)
@@ -82,23 +82,23 @@ def get_classifier(method):
 def calculate_metrics(conf_matrix, average="binary", pos_index=1):
     C = conf_matrix.shape[0]
     total_samples = conf_matrix.sum()
-    accuracy = xp.trace(conf_matrix) / total_samples if total_samples > 0 else None
+    accuracy = np.trace(conf_matrix) / total_samples if total_samples > 0 else None
 
     # Per-class components
-    tps = xp.diag(conf_matrix)
+    tps = np.diag(conf_matrix)
     fns = conf_matrix.sum(axis=1) - tps  # row sums minus tp
     fps = conf_matrix.sum(axis=0) - tps  # col sums minus tp
     tns = total_samples - (tps + fns + fps)
 
     # Avoid zero-division: compute with masking
-    with xp.errstate(divide='ignore', invalid='ignore'):
-        sens = xp.where((tps + fns) > 0, tps / (tps + fns), xp.nan)   # recall / TPR
-        spec = xp.where((tns + fps) > 0, tns / (tns + fps), xp.nan)   # TNR
-        prec = xp.where((tps + fps) > 0, tps / (tps + fps), xp.nan)   # PPV
-        f1 = xp.where(
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sens = np.where((tps + fns) > 0, tps / (tps + fns), np.nan)   # recall / TPR
+        spec = np.where((tns + fps) > 0, tns / (tns + fps), np.nan)   # TNR
+        prec = np.where((tps + fps) > 0, tps / (tps + fps), np.nan)   # PPV
+        f1 = np.where(
             (prec + sens) > 0,
             2 * (prec * sens) / (prec + sens),
-            xp.nan
+            np.nan
         )
 
     if average == "binary":
@@ -114,15 +114,15 @@ def calculate_metrics(conf_matrix, average="binary", pos_index=1):
         # supports = actual class counts (row sums)
         supports = conf_matrix.sum(axis=1)
         if average == "weighted":
-            weights = xp.where(supports > 0, supports / supports.sum(), 0.0)
+            weights = np.where(supports > 0, supports / supports.sum(), 0.0)
         elif average == "macro":
-            weights = xp.ones(C) / C
+            weights = np.ones(C) / C
         else:
             raise ValueError("average must be 'macro', 'weighted', or 'binary'.")
 
         def wavg(x):
-            x = xp.where(xp.isnan(x), 0.0, x)
-            return float(xp.sum(weights * x)) if xp.sum(weights) > 0 else None
+            x = np.where(np.isnan(x), 0.0, x)
+            return float(np.sum(weights * x)) if np.sum(weights) > 0 else None
 
         mean_sensitivity = wavg(sens)
         mean_specificity = wavg(spec)
@@ -134,12 +134,12 @@ def calculate_metrics(conf_matrix, average="binary", pos_index=1):
 
 def _nan_to_none(x):
     try:
-        return None if (x is None or xp.isnan(x)) else float(x)
+        return None if (x is None or np.isnan(x)) else float(x)
     except TypeError:
         return None
 
 def sum_confusion_matrices(conf_matrices):
-    overall_conf_matrix = xp.sum(conf_matrices, axis=0)
+    overall_conf_matrix = np.sum(conf_matrices, axis=0)
     return overall_conf_matrix
 
 def positive_class_scores(model, X, n_classes=2):
@@ -211,27 +211,27 @@ def fit_model(X_train, y_train, classifier, tune):
     return model
 
 def _unique_groups_index(groups):
-    groups = xp.asarray(groups)
-    uniq, inv = xp.unique(groups, return_inverse=True)
+    groups = np.asarray(groups)
+    uniq, inv = np.unique(groups, return_inverse=True)
     return uniq, inv
 
 def _derive_group_truth(y_true, groups, strategy='strict'):
-    y_true = xp.asarray(y_true)
+    y_true = np.asarray(y_true)
     uniq, inv = _unique_groups_index(groups)
-    y_group = xp.empty(len(uniq), dtype=y_true.dtype)
+    y_group = np.empty(len(uniq), dtype=y_true.dtype)
     for g_idx in range(len(uniq)):
         vals = y_true[inv == g_idx]
-        if strategy == 'strict' and xp.unique(vals).size == 1:
+        if strategy == 'strict' and np.unique(vals).size == 1:
             y_group[g_idx] = vals[0]
         else:
             y_group[g_idx] = Counter(vals).most_common(1)[0][0]
     return uniq, y_group
 
 def _aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
-    groups = xp.asarray(groups)
+    groups = np.asarray(groups)
     uniq, inv = _unique_groups_index(groups)
 
-    y_score = xp.asarray(y_score)
+    y_score = np.asarray(y_score)
     if n_classes == 2 and y_score.ndim == 1:
         probs = y_score.reshape(-1, 1)
         C = 1
@@ -239,21 +239,21 @@ def _aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
         probs = y_score
         C = probs.shape[1]
 
-    agg_scores = xp.zeros((len(uniq), C), dtype=float)
+    agg_scores = np.zeros((len(uniq), C), dtype=float)
 
     for g_idx in range(len(uniq)):
         mask = (inv == g_idx)
         if agg == 'mean':
             agg_scores[g_idx] = probs[mask].mean(axis=0)
         elif agg == 'median':
-            agg_scores[g_idx] = xp.median(probs[mask], axis=0)
+            agg_scores[g_idx] = np.median(probs[mask], axis=0)
         elif agg == 'vote':
             if C == 1:
                 votes = (probs[mask] >= 0.5).astype(int).ravel()
                 agg_scores[g_idx] = votes.mean()
             else:
-                preds = xp.argmax(probs[mask], axis=1)
-                freq = xp.bincount(preds, minlength=C) / preds.size
+                preds = np.argmax(probs[mask], axis=1)
+                freq = np.bincount(preds, minlength=C) / preds.size
                 agg_scores[g_idx] = freq
         else:
             raise ValueError(f"Unknown agg '{agg}'. Use 'mean' | 'median' | 'vote'.")
@@ -271,13 +271,13 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
 
     elif agg == 'max':
         uniq, inv = _unique_groups_index(groups)
-        y_score = xp.asarray(y_score)
+        y_score = np.asarray(y_score)
         if n_classes == 2 and y_score.ndim == 1:
-            g_scores = xp.zeros(len(uniq))
+            g_scores = np.zeros(len(uniq))
             for g_idx in range(len(uniq)):
                 g_scores[g_idx] = y_score[inv == g_idx].max()
         else:
-            g_scores = xp.zeros((len(uniq), n_classes))
+            g_scores = np.zeros((len(uniq), n_classes))
             for g_idx in range(len(uniq)):
                 g_scores[g_idx] = y_score[inv == g_idx].max(axis=0)
         g_ids_pred = uniq
@@ -286,21 +286,21 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
         if n_classes != 2:
             raise ValueError("agg='proportion' is only defined for binary classification.")
         uniq, inv = _unique_groups_index(groups)
-        y_score = xp.asarray(y_score)
+        y_score = np.asarray(y_score)
 
-        g_scores = xp.zeros(len(uniq))
+        g_scores = np.zeros(len(uniq))
         for g_idx in range(len(uniq)):
             probs = y_score[inv == g_idx]
             if probs.ndim > 1:
                 probs = probs[:, 1]
-            frac_pos = xp.mean(probs >= threshold)
+            frac_pos = np.mean(probs >= threshold)
             g_scores[g_idx] = frac_pos
         g_ids_pred = uniq
 
     else:
         raise ValueError(f"Unknown agg '{agg}'. Use 'mean' | 'median' | 'vote' | 'max' | 'proportion'.")
 
-    assert xp.array_equal(g_ids_truth, g_ids_pred), "Mismatch in group ids alignment."
+    assert np.array_equal(g_ids_truth, g_ids_pred), "Mismatch in group ids alignment."
 
     if n_classes == 2:
         if g_scores.ndim == 1:
@@ -308,10 +308,10 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
             y_pred_g = (g_scores >= grp_cutoff).astype(int)
             y_score_out = g_scores  # keep the scalar group score
         else:
-            y_pred_g = xp.argmax(g_scores, axis=1)
+            y_pred_g = np.argmax(g_scores, axis=1)
             y_score_out = g_scores[:, 1]
     else:
-        y_pred_g = xp.argmax(g_scores, axis=1)
+        y_pred_g = np.argmax(g_scores, axis=1)
         y_score_out = g_scores
 
     conf_g = confusion_matrix(y_true_g, y_pred_g, labels=unique_labels_encoded)
@@ -356,15 +356,15 @@ def combine_results(results_list):
             param_values[k].append(rp.get(k, None))
 
     def _is_number(x):
-        return isinstance(x, (int, float, xp.integer, xp.floating))
+        return isinstance(x, (int, float, np.integer, np.floating))
 
     def _all_equal(xs):
         if not xs:
             return True
         first = xs[0]
         for v in xs[1:]:
-            if isinstance(v, xp.ndarray) and isinstance(first, xp.ndarray):
-                if not xp.array_equal(v, first):
+            if isinstance(v, np.ndarray) and isinstance(first, np.ndarray):
+                if not np.array_equal(v, first):
                     return False
             else:
                 if v != first:
@@ -390,7 +390,7 @@ def combine_results(results_list):
             summarized_params["unique_labels"] = results_list[0].params.unique_labels
 
     try:
-        first_ul = xp.array(results_list[0].params.unique_labels, dtype=object)
+        first_ul = np.array(results_list[0].params.unique_labels, dtype=object)
         unions = list(first_ul)
         seen = set(unions)
         for r in results_list[1:]:
@@ -401,7 +401,7 @@ def combine_results(results_list):
                 if x not in seen:
                     unions.append(x)
                     seen.add(x)
-        summarized_params["unique_labels"] = xp.array(unions, dtype=object)
+        summarized_params["unique_labels"] = np.array(unions, dtype=object)
     except Exception:
         pass
 
@@ -416,7 +416,7 @@ def combine_results(results_list):
 
     # Concatenate y_true
     y_true_parts = [r.results.y_true for r in results_list if getattr(r.results, "y_true", None) is not None]
-    y_true_all = xp.concatenate(y_true_parts) if y_true_parts else None
+    y_true_all = np.concatenate(y_true_parts) if y_true_parts else None
 
     # Concatenate y_score (binary 1D vs multiclass 2D)
     y_score_parts = [r.results.y_score for r in results_list if getattr(r.results, "y_score", None) is not None]
@@ -426,27 +426,27 @@ def combine_results(results_list):
         if n_classes == 2:
             normalized = []
             for s in y_score_parts:
-                s = xp.asarray(s)
+                s = np.asarray(s)
                 if s.ndim == 1:
                     normalized.append(s)
                 elif s.ndim == 2 and s.shape[1] == 2:
                     normalized.append(s[:, 1])
                 else:
                     normalized.append(s.reshape(s.shape[0], -1)[:, -1])
-            y_score_all = xp.concatenate(normalized)
+            y_score_all = np.concatenate(normalized)
         else:
             normalized = []
             for s in y_score_parts:
-                s = xp.asarray(s)
+                s = np.asarray(s)
                 if s.ndim == 1:
                     s = s.reshape(-1, 1)
                 if s.shape[1] != n_classes:
-                    tmp = xp.zeros((s.shape[0], n_classes), dtype=float)
+                    tmp = np.zeros((s.shape[0], n_classes), dtype=float)
                     m = min(n_classes, s.shape[1])
                     tmp[:, :m] = s[:, :m]
                     s = tmp
                 normalized.append(s)
-            y_score_all = xp.vstack(normalized)
+            y_score_all = np.vstack(normalized)
 
     results_ns = make_namespace({
         "accuracy":    acc,
@@ -474,7 +474,7 @@ def combine_results(results_list):
 
         # Concatenate group y_true / y_score / group_ids when available
         g_ytrue_parts = [r.group_results.y_true for r in results_list if getattr(r.group_results, "y_true", None) is not None]
-        g_ytrue_all = xp.concatenate(g_ytrue_parts) if g_ytrue_parts else None
+        g_ytrue_all = np.concatenate(g_ytrue_parts) if g_ytrue_parts else None
 
         g_score_parts = [r.group_results.y_score for r in results_list if getattr(r.group_results, "y_score", None) is not None]
         g_score_all = None
@@ -483,30 +483,30 @@ def combine_results(results_list):
             if n_classes == 2:
                 normalized = []
                 for s in g_score_parts:
-                    s = xp.asarray(s)
+                    s = np.asarray(s)
                     if s.ndim == 1:
                         normalized.append(s)
                     elif s.ndim == 2 and s.shape[1] == 2:
                         normalized.append(s[:, 1])
                     else:
                         normalized.append(s.reshape(s.shape[0], -1)[:, -1])
-                g_score_all = xp.concatenate(normalized)
+                g_score_all = np.concatenate(normalized)
             else:
                 normalized = []
                 for s in g_score_parts:
-                    s = xp.asarray(s)
+                    s = np.asarray(s)
                     if s.ndim == 1:
                         s = s.reshape(-1, 1)
                     if s.shape[1] != n_classes:
-                        tmp = xp.zeros((s.shape[0], n_classes), dtype=float)
+                        tmp = np.zeros((s.shape[0], n_classes), dtype=float)
                         m = min(n_classes, s.shape[1])
                         tmp[:, :m] = s[:, :m]
                         s = tmp
                     normalized.append(s)
-                g_score_all = xp.vstack(normalized)
+                g_score_all = np.vstack(normalized)
 
         g_ids_parts = [r.group_results.group_ids for r in results_list if getattr(r.group_results, "group_ids", None) is not None]
-        g_ids_all = xp.concatenate(g_ids_parts) if g_ids_parts else None
+        g_ids_all = np.concatenate(g_ids_parts) if g_ids_parts else None
 
         group_ns = make_namespace({
             "accuracy":    g_acc,

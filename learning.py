@@ -4,7 +4,6 @@ from signalearn.classes import ClassificationResult
 from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
 from signalearn.general_utility import cleanup
-from signalearn.xp import xp, asnumpy
 import numpy as np
 
 def classify(
@@ -21,7 +20,7 @@ def classify(
 
     N = len(points)
 
-    ys = xp.array([point.y for point in points])
+    ys = np.array([point.y for point in points])
     
     labels = prepare_labels(points, label)
     groups = prepare_groups(points, group)
@@ -142,19 +141,19 @@ def learning_curve(
     agg_method='mean'
 ):
 
-    rng = xp.random.default_rng(split_state)
+    rng = np.random.default_rng(split_state)
 
-    values = xp.array([getattr(p, by_attribute) for p in points])
-    unique_vals = xp.unique(values)
+    values = np.array([getattr(p, by_attribute) for p in points])
+    unique_vals = np.unique(values)
     rng.shuffle(unique_vals)
     n_unique = len(unique_vals)
 
     if n_unique < 1:
-        return xp.array([0], dtype=int), [xp.nan]
+        return np.array([0], dtype=int), [np.nan]
 
     start_k = start_val
-    counts = xp.ceil(xp.linspace(start_k, n_unique, divisions)).astype(int)
-    counts = xp.unique(xp.clip(counts, 1, n_unique))
+    counts = np.ceil(np.linspace(start_k, n_unique, divisions)).astype(int)
+    counts = np.unique(np.clip(counts, 1, n_unique))
 
     scores = []
     group_scores = []
@@ -165,7 +164,7 @@ def learning_curve(
         if group is not None:
             subset_groups = {getattr(p, group) for p in subset}
             if len(subset_groups) < 2:
-                scores.append(xp.nan)
+                scores.append(np.nan)
                 continue
 
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
@@ -180,12 +179,12 @@ def learning_curve(
                 shuffles=shuffles_per_split,
                 agg_method=agg_method
             )
-            f1_scores = [res.results.f1 for res in res_list if not xp.isnan(res.results.f1)]
-            mean_f1 = xp.mean(f1_scores) if len(f1_scores) > 0 else xp.nan
+            f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
+            mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
             scores.append(mean_f1)
 
-            group_f1_scores = [res.group_results.f1 for res in res_list if not xp.isnan(res.group_results.f1)]
-            mean_group_f1 = xp.mean(group_f1_scores) if len(group_f1_scores) > 0 else xp.nan
+            group_f1_scores = [res.group_results.f1 for res in res_list if not np.isnan(res.group_results.f1)]
+            mean_group_f1 = np.mean(group_f1_scores) if len(group_f1_scores) > 0 else np.nan
             group_scores.append(mean_group_f1)
             
         else:
@@ -220,7 +219,7 @@ def score_curve(
     agg_method='mean'
 ):
 
-    fractions = xp.linspace(start_fraction, 1.0, divisions)
+    fractions = np.linspace(start_fraction, 1.0, divisions)
     scores = []
     group_scores = []
     for frac in fractions:
@@ -238,12 +237,12 @@ def score_curve(
                 shuffles=shuffles_per_split,
                 agg_method=agg_method
             )
-            f1_scores = [res.results.f1 for res in res_list if not xp.isnan(res.results.f1)]
-            mean_f1 = xp.mean(f1_scores) if len(f1_scores) > 0 else xp.nan
+            f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
+            mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
             scores.append(mean_f1)
 
-            group_f1_scores = [res.group_results.f1 for res in res_list if not xp.isnan(res.group_results.f1)]
-            mean_group_f1 = xp.mean(group_f1_scores) if len(group_f1_scores) > 0 else xp.nan
+            group_f1_scores = [res.group_results.f1 for res in res_list if not np.isnan(res.group_results.f1)]
+            mean_group_f1 = np.mean(group_f1_scores) if len(group_f1_scores) > 0 else np.nan
             group_scores.append(mean_group_f1)
             
         else:
