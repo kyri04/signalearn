@@ -29,7 +29,7 @@ def classify(
 
     labels_encoded, encoder = encode(labels)
     unique_labels = encoder.classes_
-    unique_labels_encoded = xp.unique(labels_encoded)
+    unique_labels_encoded = np.unique(labels_encoded)
 
     train_idx, test_idx = get_single_split(N, labels_encoded, groups, test_size, split_state)
 
