@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from collections import Counter
 from signalearn.classes import ClassificationResult
 
-from signalearn.xp import xp, sp, is_gpu, cpu_fallback, to_cpu, to_gpu
+from signalearn.xp import xp
 from signalearn.utility import *
 
 def reduce(y, n_components=2):
@@ -27,9 +27,9 @@ def encode(labels):
 
 def prepare_labels(points, label):
     if isinstance(label, str):
-        labels = xp.array([getattr(point, label) for point in points], dtype=str)
+        labels = np.array([getattr(point, label) for point in points], dtype=str)
     elif isinstance(label, list):
-        labels = xp.array(
+        labels = np.array(
             ["_".join(str(getattr(point, attr)) for attr in label) for point in points],
             dtype=str,
         )
@@ -39,7 +39,7 @@ def prepare_labels(points, label):
 
 def prepare_groups(points, group):
     return (
-        xp.array([getattr(point, group) for point in points], dtype=str)
+        np.array([getattr(point, group) for point in points], dtype=str)
         if group is not None
         else None
     )
