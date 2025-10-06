@@ -94,15 +94,8 @@ def classify(
         set_group_results=group_results_ns
     )
 
-    import psutil, os, tracemalloc
-    proc = psutil.Process(os.getpid())
-    print("RSS GB:", proc.memory_info().rss/1e9)
-    if not tracemalloc.is_tracing():
-        tracemalloc.start()
-    snap = tracemalloc.take_snapshot()
-    top = snap.statistics('lineno')[:5]
-    for s in top:
-        print(s)
+    del model, points, ys, X_train_raw, X_test_raw, X_train, X_test
+    cleanup()
 
     return res
 
@@ -234,11 +227,11 @@ def score_curve(
         subset = sample(points, frac)
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_classify(
-                subset,
-                label,
-                group,
-                agg_group,
-                classifier,
+                points=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
                 test_size=test_size,
                 balance=balance,
                 shuffles=shuffles_per_split,
