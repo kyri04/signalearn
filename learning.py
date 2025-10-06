@@ -4,7 +4,8 @@ from signalearn.classes import ClassificationResult
 from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
 from signalearn.general_utility import cleanup
-from signalearn.xp import xp
+from signalearn.xp import xp, asnumpy
+import numpy as np
 
 def classify(
     points,
@@ -28,7 +29,7 @@ def classify(
 
     labels_encoded, encoder = encode(labels)
     unique_labels = encoder.classes_
-    unique_labels_encoded = np.unique(labels_encoded)
+    unique_labels_encoded = np.unique(asnumpy(labels_encoded))
 
     train_idx, test_idx = get_single_split(N, labels_encoded, groups, test_size, split_state)
 

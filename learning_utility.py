@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from collections import Counter
 from signalearn.classes import ClassificationResult
 
-from signalearn.xp import xp
+from signalearn.xp import xp, asnumpy
 from signalearn.utility import *
 
 def reduce(y, n_components=2):
