@@ -241,11 +241,11 @@ def score_curve(
             
         else:
             res = classify(
-                subset,
-                label,
-                group,
-                agg_group,
-                classifier,
+                points=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
                 test_size=test_size,
                 balance=balance,
                 split_state=split_state,
