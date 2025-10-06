@@ -94,8 +94,15 @@ def classify(
         set_group_results=group_results_ns
     )
 
-    del model, X_train, X_test, X_train_raw, X_test_raw, y_pred, y_score
-    cleanup()
+    import psutil, os, tracemalloc
+    proc = psutil.Process(os.getpid())
+    print("RSS GB:", proc.memory_info().rss/1e9)
+    if not tracemalloc.is_tracing():
+        tracemalloc.start()
+    snap = tracemalloc.take_snapshot()
+    top = snap.statistics('lineno')[:5]
+    for s in top:
+        print(s)
 
     return res
 
