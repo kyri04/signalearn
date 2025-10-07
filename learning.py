@@ -13,8 +13,7 @@ def classify(
     test_size=0.2,
     split_state=42,
     agg_method='mean',
-    agg_group=None,
-    scale=False
+    agg_group=None
 ):
 
     N = len(points)
@@ -39,8 +38,7 @@ def classify(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
-    else: X_train, X_test = X_train_raw, X_test_raw
+    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
 
     model = get_classifier(classifier)
     model.fit(X_train, y_train)
