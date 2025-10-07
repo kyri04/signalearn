@@ -1,5 +1,5 @@
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.tree import DecisionTreeClassifier
@@ -9,6 +9,11 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import confusion_matrix
+
+try:
+    from cuml.preprocessing import StandardScaler as StandardScaler # type: ignore
+except Exception:
+    from sklearn.preprocessing import StandardScaler
 
 from collections import Counter
 from signalearn.classes import ClassificationResult
@@ -66,6 +71,7 @@ def standardize_train_test(X_train_raw, X_test_raw):
     scaler = StandardScaler().fit(X_train_raw)
     X_train = scaler.transform(X_train_raw)
     X_test = scaler.transform(X_test_raw)
+
     return X_train, X_test
 
 def get_classifier(method):
