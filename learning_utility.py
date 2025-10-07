@@ -77,7 +77,7 @@ def standardize_train_test(X_train_raw, X_test_raw):
 def get_classifier(method):
     classifiers = {
         "dt": DecisionTreeClassifier(random_state=42),
-        "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10),
+        "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10, class_weight='balanced'),
         "svm": SVC(random_state=42, probability=True),
         "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000),
         "knn": KNeighborsClassifier(),
@@ -201,20 +201,6 @@ def get_param_grid(classify_method):
         }
     }
     return searchers[classify_method]
-
-def fit_model(X_train, y_train, classifier, tune):
-    if tune:
-        base = get_classifier(classifier)
-        pipe = Pipeline([('scaler', StandardScaler()), ('clf', base)])
-        grid = get_param_grid(classifier)
-        grid_piped = {f'clf__{k}': v for k, v in grid.items()}
-        search = RandomizedSearchCV(pipe, param_distributions=grid_piped, n_iter=20, scoring='accuracy', cv=3, random_state=42, n_jobs=-1, verbose=1)
-        search.fit(X_train, y_train)
-        print(search.best_params_)
-        return search.best_estimator_
-    model = get_classifier(classifier)
-    model.fit(X_train, y_train)
-    return model
 
 def _unique_groups_index(groups):
     groups = np.asarray(groups)
