@@ -14,33 +14,22 @@ def classify(
     split_state=42,
     agg_method='mean',
     agg_group=None,
+    scale=False
 ):
 
     N = len(points)
 
-    print("START make ys array")
     ys = np.array([point.y for point in points])
-    print("FINISH make ys array")
     
-    print("START make labels")
     labels = prepare_labels(points, label)
-    print("FINISH make labels")
-    print("START prepare groups")
     groups = prepare_groups(points, group)
-    print("FINISH prepare groups")
-    print("START prepare agg groups")
     agg_groups = prepare_groups(points, agg_group) if agg_group is not None else None
-    print("FINISH prepare agg groups")
 
-    print("START encode labels")
     labels_encoded, encoder = encode(labels)
     unique_labels = encoder.classes_
     unique_labels_encoded = np.unique(labels_encoded)
-    print("FINISH encode labels")
 
-    print("START split data")
     train_idx, test_idx = get_single_split(N, labels_encoded, groups, test_size, split_state)
-    print("FINISH split data")
 
     if groups is not None:
         train_groups = set(groups[train_idx])
@@ -50,36 +39,22 @@ def classify(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    print("START standardize data")
-    # X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
-    X_train = X_train_raw
-    X_test = X_test_raw
-    print("FINISH standardize data")
+    if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    else: X_train, X_test = X_train_raw, X_test_raw
 
-    print("START train model")
     model = get_classifier(classifier)
     model.fit(X_train, y_train)
-    print("FINISH train model")
 
-    print("START predict")
     y_pred = model.predict(X_test)
-    print("FINISH predict")
-    print("START confusion matrix")
     conf_matrix = confusion_matrix(y_test, y_pred, labels=unique_labels_encoded)
-    print("FINISH confusion matrix")
 
-    print("START positive class scores")
     n_classes = len(unique_labels_encoded)
     y_score = positive_class_scores(model, X_test, n_classes=n_classes)
     if n_classes == 2 and y_score.ndim > 1:
             y_score = y_score[:, 1]
-    print("FINISH positive class scores")
 
-    print("START calculate metrics")
     accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall, mean_f1 = calculate_metrics(conf_matrix)
-    print("FINISH calculate metrics")
 
-    print("START group level evaluation")
     group_results_ns = None
     if agg_groups is not None:
         groups_test = agg_groups[test_idx]
@@ -93,9 +68,6 @@ def classify(
         )
         group_results_ns = make_namespace(group_eval)
 
-    print("FINISH group level evaluation")
-
-    print("START create result object")
     res = ClassificationResult(
         set_params=make_namespace({
             "label": label,
@@ -120,8 +92,6 @@ def classify(
         }),
         set_group_results=group_results_ns
     )
-    print("FINISH create result object")
-    print("---- DONE classification ----")
 
     return res
 
