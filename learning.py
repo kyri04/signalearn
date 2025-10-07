@@ -51,7 +51,9 @@ def classify(
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
     print("START standardize data")
-    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    # X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    X_train = X_train_raw
+    X_test = X_test_raw
     print("FINISH standardize data")
 
     print("START train model")
