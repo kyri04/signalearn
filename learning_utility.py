@@ -69,8 +69,8 @@ def scale(y):
 
 def standardize_train_test(X_train_raw, X_test_raw):
     scaler = StandardScaler().fit(X_train_raw)
-    X_train = scaler.transform(X_train_raw)
-    X_test = scaler.transform(X_test_raw)
+    X_train = scaler.transform(X_train_raw).astype(np.float32)
+    X_test = scaler.transform(X_test_raw).astype(np.float32)
 
     return X_train, X_test
 

@@ -38,7 +38,7 @@ def classify(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw).astype(np.float32)
+    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
 
     model = get_classifier(classifier)
     model.fit(X_train, y_train)
