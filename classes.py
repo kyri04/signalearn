@@ -1,3 +1,5 @@
+import numpy as np
+
 class Series:
         
     def __init__(self, parameters):
@@ -27,16 +29,20 @@ class ClassificationResult:
         return "\n".join(lines)
 
     def format_results(self, results, title="RESULTS:"):
+        def fmt(x, pct=False):
+            if x is None or (isinstance(x, float) and np.isnan(x)):
+                return "N/A"
+            return f"{x * 100:.2f}%" if pct else f"{x:.2f}"
+
         return (
-            title + "\n"
-            + f"Accuracy: {results.accuracy * 100:.2f}%\n"
-            + f"Precision: {results.precision * 100:.2f}%\n"
-            + f"Recall: {results.recall * 100:.2f}%\n"
-            + f"Specificity: {results.specificity * 100:.2f}%\n"
-            + f"Sensitivity: {results.sensitivity * 100:.2f}%\n"
-            + f"F1: {results.f1:.2f}\n\n"
-            + self.display_confusion_matrix(results.conf_matrix)
-            + "\n\n"
+            f"{title}\n"
+            f"Accuracy: {fmt(results.accuracy, True)}\n"
+            f"Precision: {fmt(results.precision, True)}\n"
+            f"Recall: {fmt(results.recall, True)}\n"
+            f"Specificity: {fmt(results.specificity, True)}\n"
+            f"Sensitivity: {fmt(results.sensitivity, True)}\n"
+            f"F1: {fmt(results.f1)}\n\n"
+            f"{self.display_confusion_matrix(results.conf_matrix)}\n\n"
         )
     
     def display_confusion_matrix(self, conf_matrix):
