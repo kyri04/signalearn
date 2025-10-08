@@ -1,4 +1,5 @@
 import numpy as np
+from numbers import Number
 
 class Series:
         
@@ -29,21 +30,39 @@ class ClassificationResult:
         return "\n".join(lines)
 
     def format_results(self, results, title="RESULTS:"):
-        def fmt(x, pct=False):
-            if x is None or (isinstance(x, float) and np.isnan(x)):
-                return "N/A"
-            return f"{x * 100:.2f}%" if pct else f"{x:.2f}"
 
-        return (
-            f"{title}\n"
-            f"Accuracy: {fmt(results.accuracy, True)}\n"
-            f"Precision: {fmt(results.precision, True)}\n"
-            f"Recall: {fmt(results.recall, True)}\n"
-            f"Specificity: {fmt(results.specificity, True)}\n"
-            f"Sensitivity: {fmt(results.sensitivity, True)}\n"
-            f"F1: {fmt(results.f1)}\n\n"
-            f"{self.display_confusion_matrix(results.conf_matrix)}\n\n"
-        )
+        def to_float(x):
+            if x is None:
+                return None
+            try:
+                if isinstance(x, np.ndarray):
+                    if x.size == 0:
+                        return None
+                    x = x.ravel()[0]
+                if not isinstance(x, Number):
+                    x = float(x)
+                if isinstance(x, float) and np.isnan(x):
+                    return None
+                return float(x)
+            except Exception:
+                return None
+
+        def pct(x):  v = to_float(x); return "N/A" if v is None else f"{v*100:.2f}%"
+        def num(x):  v = to_float(x); return "N/A" if v is None else f"{v:.2f}"
+
+        lines = [
+            f"{title}",
+            f"Accuracy: {pct(getattr(results, 'accuracy', None))}",
+            f"Precision: {pct(getattr(results, 'precision', None))}",
+            f"Recall: {pct(getattr(results, 'recall', None))}",
+            f"Specificity: {pct(getattr(results, 'specificity', None))}",
+            f"Sensitivity: {pct(getattr(results, 'sensitivity', None))}",
+            f"F1: {num(getattr(results, 'f1', None))}",
+            "",
+            self.display_confusion_matrix(getattr(results, 'conf_matrix', None)) or "",
+            ""
+        ]
+        return "\n".join(lines)
     
     def display_confusion_matrix(self, conf_matrix):
         col_width = max(5, max(len(str(label)) for label in self.params.unique_labels))
