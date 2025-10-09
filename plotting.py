@@ -1,10 +1,3 @@
-# try:
-#     from cuml.internals.sklearn import patch_sklearn
-#     patch_sklearn()
-# except Exception:
-#     # cuml not installed or patch failed; proceed on CPU
-#     pass
-
 import os
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -14,21 +7,59 @@ from signalearn.utility import *
 from signalearn.preprocess import func_y
 from sklearn.metrics import roc_curve, roc_auc_score
 
-
-def plot_importances(result):
+def plot_importances(result, points=None, func=None):
     plt.close('all')
     fig, ax = plt.subplots()
 
-    best_index = result.scores.index(max(result.scores))
-    ax.plot(result.x_range, result.feature_importances[best_index])
+    if isinstance(result, list):
+        importances = []
+        first = None
+        for r in result:
+            fi = getattr(r.results, "feature_importances", None)
+            if fi is not None:
+                importances.append(np.asarray(fi, dtype=float))
+                if first is None:
+                    first = r
 
-    ax.set_xlabel(f'{result.points[0].xlabel} ({result.points[0].xunit})')
-    ax.set_ylabel('Importance')
-    # ax.set_title('Feature Importances')
+        imp = np.mean(importances, axis=0)
+        x_imp = np.asarray(first.params.mean_point.x, dtype=float)
+        xlabel = f"{first.params.mean_point.xlabel} ({first.params.mean_point.xunit})"
+    else:
+        fi = getattr(result.results, "feature_importances", None)
+        imp = np.asarray(fi, dtype=float)
+        x_imp = np.asarray(points[0].x, dtype=float)
+        xlabel = f"{points[0].xlabel} ({points[0].xunit})"
 
+    ax.plot(x_imp, imp, label="Feature importances")
+
+    if points:
+
+        Ys = []
+        for p in points:
+            Ys.append(func(p.y))
+
+        Y = np.vstack(Ys)
+        med = np.median(Y, axis=0)
+
+        imp_min, imp_max = float(np.min(imp)), float(np.max(imp))
+        med_min, med_max = float(np.min(med)), float(np.max(med))
+        if med_max > med_min:
+            scale = (imp_max - imp_min) / (med_max - med_min) if imp_max > imp_min else 1.0
+            offset = imp_min - scale * med_min
+            med_scaled = scale * med + offset
+        else:
+            med_scaled = np.full_like(med, imp_min)
+
+        lbl = f"Median {points[0].ylabel}" if func is None else f"Median {func.__name__}({points[0].ylabel})"
+        ax.plot(x_imp, med_scaled, linestyle=":", color="0", label=lbl)
+
+    ax.set_yticks([])
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Importance")
+    if points:
+        ax.legend()
     fig.tight_layout()
     return fig, ax
-
 
 def plot_pca(points, label=None, n_components=2):
     plt.close('all')
@@ -102,7 +133,6 @@ def plot_pca(points, label=None, n_components=2):
     fig.tight_layout()
     return fig, ax
 
-
 def plot_point(point, func=None):
     plt.close('all')
     fig, ax = plt.subplots()
@@ -115,6 +145,18 @@ def plot_point(point, func=None):
     fig.tight_layout()
     return fig, ax
 
+def plot_points_range(points, func=None, q=(0.25, 0.5, 0.75)):
+    import numpy as np, matplotlib.pyplot as plt
+    X = np.asarray(points[0].x)
+    Y = np.vstack([(p.y if func is None else func(p.y)) for p in points])
+    q1, med, q3 = np.quantile(Y, q, axis=0)
+    fig, ax = plt.subplots()
+    ax.fill_between(X, q1, q3, alpha=0.25, label='IQR')
+    ax.plot(X, med, lw=1.5, label='Median')
+    ax.set_xlabel(f'{points[0].xlabel} ({points[0].xunit})')
+    ax.set_ylabel(points[0].ylabel if func is None else f'{func.__name__} {points[0].ylabel}')
+    ax.legend(); fig.tight_layout()
+    return fig, ax
 
 def plot_scaled(points, idx=0):
     ys_scaled = scale(np.array([point.y for point in points]))
@@ -129,7 +171,6 @@ def plot_scaled(points, idx=0):
 
     fig.tight_layout()
     return fig, ax
-
 
 def plot_points(points, func=None, offset=0.1):
     plt.close('all')
@@ -150,7 +191,6 @@ def plot_points(points, func=None, offset=0.1):
     fig.tight_layout()
     return fig, ax
 
-
 def plot_func(points, func=np.mean):
     plt.close('all')
     attr, first_val = find_same_attribute(points)
@@ -165,7 +205,6 @@ def plot_func(points, func=np.mean):
 
     fig.tight_layout()
     return fig, ax
-
 
 def plot_func_difference(points_a, points_b, func=np.mean):
     plt.close('all')
@@ -183,7 +222,6 @@ def plot_func_difference(points_a, points_b, func=np.mean):
     fig.tight_layout()
     return fig, ax
 
-
 def plot_distribution(points, func=np.mean):
     plt.close('all')
     # Calculate the mean of y values for each point
@@ -196,7 +234,6 @@ def plot_distribution(points, func=np.mean):
 
     fig.tight_layout()
     return fig, ax
-
 
 def save_figure(filename, dpi=300, figsize=None, fig: Figure = None):
     """
@@ -214,7 +251,6 @@ def save_figure(filename, dpi=300, figsize=None, fig: Figure = None):
         fig.set_size_inches(figsize)
     os.makedirs('plots', exist_ok=True)
     fig.savefig(f"plots/{filename}", bbox_inches='tight', dpi=dpi)
-
 
 def plot_rocs(results):
     plt.close('all')
@@ -260,16 +296,25 @@ def plot_rocs(results):
     fig.tight_layout()
     return fig, ax
 
+def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
 
-def plot_learning_curve(xs, scores, xlabel="Training Data Fraction", ylabel="Score"):
+    xs, ys = [], []
+    for r in results:
+        x = getattr(r.volume, volume_attr, None)
+        y = getattr(r.results, result_attr, None)
+
+        xs.append(x); ys.append(y)
+
+    xlabel = f"Number of {volume_attr}"
+    ylabel = result_attr.replace('_', ' ').capitalize()
+
     plt.close('all')
     fig, ax = plt.subplots()
-
-    ax.scatter(xs, scores)
-    ax.plot(xs, fit_spline(xs, scores)(xs), linestyle="--", color="black")
+    ax.scatter(xs, ys, s=12)
+    ax.plot(xs, fit_spline(xs, ys)(xs), linestyle="--", color="black")
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-
     fig.tight_layout()
     return fig, ax
+

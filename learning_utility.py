@@ -11,13 +11,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import confusion_matrix
 
 from sklearn.preprocessing import StandardScaler
-# try:
-#     from cuml.preprocessing import StandardScaler as StandardScaler # type: ignore
-# except Exception:
-#     from sklearn.preprocessing import StandardScaler
+from collections import defaultdict
 
 from collections import Counter
-from signalearn.classes import ClassificationResult
+from signalearn.classes import Result
 
 import numpy as np
 from signalearn.utility import *
@@ -53,6 +50,15 @@ def prepare_groups(points, group):
 def build_name(point_type, label, group, classifier, attr_same, val_same):
     suffix = f"-{attr_same}={val_same}" if attr_same is not None and val_same is not None else ""
     return f"{point_type}-{label}{('-' + group) if group is not None else ''}-{classifier}{suffix}"
+
+def get_feature_importances(model):
+    feature_importances = None
+    if hasattr(model, "feature_importances_"):
+        feature_importances = model.feature_importances_
+    elif hasattr(model, "coef_"):
+        feature_importances = np.abs(model.coef_).flatten()
+
+    return feature_importances
 
 def get_single_split(N, y, groups, test_size=0.2, random_state=42):
     if groups is not None:
@@ -323,6 +329,26 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
         "group_ids": g_ids_truth
     }
 
+def combine_volume(results_list):
+    all_keys = set()
+    for r in results_list:
+        all_keys.update(vars(r.volume).keys())
+
+    out = {}
+    for k in all_keys:
+        vals = []
+        for r in results_list:
+            v = getattr(r.volume, k, None)
+            if v is None:
+                continue
+
+            if isinstance(v, (int, np.integer)):
+                vals.append(int(v))
+        if vals:
+            out[k] = max(vals)
+
+    return make_namespace(out)
+
 def combine_results(results_list):
     """
     Combine a list of ClassificationResult objects (e.g., from shuffle_classify) into one.
@@ -514,9 +540,10 @@ def combine_results(results_list):
             "group_ids":   g_ids_all,
         })
 
-    # ---- Return combined ClassificationResult ----
-    return ClassificationResult(
+    vol_ns = combine_volume(results_list)
+    return Result(
         set_params=params_ns,
+        set_volume=vol_ns,
         set_results=results_ns,
         set_group_results=group_ns
     )

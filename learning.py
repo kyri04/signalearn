@@ -1,9 +1,12 @@
 from signalearn.utility import *
 from signalearn.preprocess import sample
-from signalearn.classes import ClassificationResult
+from signalearn.classes import *
 from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
 import numpy as np
+
+from signalearn.preprocess import func_y
+import copy
 
 def classify(
     points,
@@ -55,6 +58,8 @@ def classify(
 
     accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall, mean_f1 = calculate_metrics(conf_matrix)
 
+    feature_importances = get_feature_importances(model)
+
     group_results_ns = None
     if agg_groups is not None:
         groups_test = agg_groups[test_idx]
@@ -68,7 +73,15 @@ def classify(
         )
         group_results_ns = make_namespace(group_eval)
 
-    res = ClassificationResult(
+    attributes = set(points[0].__dict__) - set(get_attributes(Series))
+    unique_counts = {a: count_unique(points, a) for a in sorted(attributes)}
+
+    res = Result(
+        set_volume=make_namespace({
+            "points": N,
+            "classes": len(unique_labels),
+            **unique_counts
+        }),
         set_params=make_namespace({
             "label": label,
             "group": group,
@@ -89,6 +102,7 @@ def classify(
             "conf_matrix": conf_matrix,
             "y_true": y_test,
             "y_score": y_score,
+            "feature_importances": feature_importances
         }),
         set_group_results=group_results_ns
     )
@@ -131,7 +145,7 @@ def learning_curve(
     test_size=0.2,
     split_state=42,
     divisions=5,
-    start_val=4,
+    start_val=0,
     shuffles_per_split=None,
     agg_method='mean',
     scale=False
@@ -151,17 +165,10 @@ def learning_curve(
     counts = np.ceil(np.linspace(start_k, n_unique, divisions)).astype(int)
     counts = np.unique(np.clip(counts, 1, n_unique))
 
-    scores = []
-    group_scores = []
+    results = []
     for k in counts:
         chosen = set(unique_vals[:k])
         subset = [p for p in points if getattr(p, by_attribute) in chosen]
-
-        if group is not None:
-            subset_groups = {getattr(p, group) for p in subset}
-            if len(subset_groups) < 2:
-                scores.append(np.nan)
-                continue
 
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_classify(
@@ -175,13 +182,7 @@ def learning_curve(
                 agg_method=agg_method,
                 scale=scale
             )
-            f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
-            mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
-            scores.append(mean_f1)
-
-            group_f1_scores = [res.group_results.f1 for res in res_list if not np.isnan(res.group_results.f1)]
-            mean_group_f1 = np.mean(group_f1_scores) if len(group_f1_scores) > 0 else np.nan
-            group_scores.append(mean_group_f1)
+            results.append(combine_results(res_list))
             
         else:
             res = classify(
@@ -195,65 +196,6 @@ def learning_curve(
                 agg_method=agg_method,
                 scale=scale
             )
-            scores.append(res.results.f1)
-            group_scores.append(res.group_results.f1)
+            results.append(res)
 
-    return counts, scores, group_scores
-
-def score_curve(
-    points, 
-    label, 
-    group=None, 
-    agg_group=None,
-    classifier='rf', 
-    test_size=0.2,
-    split_state=42, 
-    divisions=5,
-    start_fraction=0.05,
-    shuffles_per_split=None,
-    agg_method='mean',
-    scale=False
-):
-
-    fractions = np.linspace(start_fraction, 1.0, divisions)
-    scores = []
-    group_scores = []
-    for frac in fractions:
-
-        subset = sample(points, frac)
-        if (shuffles_per_split is not None) and (shuffles_per_split > 1):
-            res_list = shuffle_classify(
-                points=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                shuffles=shuffles_per_split,
-                agg_method=agg_method,
-                scale=scale
-            )
-            f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
-            mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
-            scores.append(mean_f1)
-
-            group_f1_scores = [res.group_results.f1 for res in res_list if not np.isnan(res.group_results.f1)]
-            mean_group_f1 = np.mean(group_f1_scores) if len(group_f1_scores) > 0 else np.nan
-            group_scores.append(mean_group_f1)
-            
-        else:
-            res = classify(
-                points=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                split_state=split_state,
-                agg_method=agg_method,
-                scale=scale
-            )
-            scores.append(res.results.f1)
-            group_scores.append(res.group_results.f1)
-
-    return fractions, scores, group_scores
+    return results

@@ -46,6 +46,39 @@ def trim(points, percent=0.05, front=True, back=True, threshold=1e-8):
 
     return trimmed
 
+def trim(points, num=3, front=True, back=True, threshold=1e-8):
+
+    starts, ends = [], []
+    for point in points:
+        y = np.array(point.y)
+        nonzero = np.where(y > threshold)[0]
+        if nonzero.size > 0:
+            starts.append(nonzero[0])
+            ends.append(nonzero[-1] + 1)
+    if not starts or not ends:
+        return points
+
+    global_start = max(starts)
+    global_end   = min(ends)
+    usable_len = global_end - global_start
+
+    start = global_start + num if front else global_start
+    end   = global_end - num if back else global_end
+
+    if end <= start:
+        start, end = global_start, global_end
+
+    sl = slice(start, end)
+
+    trimmed = []
+    for point in points:
+        new_params = point.__dict__.copy()
+        new_params["x"] = np.array(point.x)[sl]
+        new_params["y"] = np.array(point.y)[sl]
+        trimmed.append(point.__class__(new_params))
+
+    return trimmed
+
 def interpolate(points, n=50):
 
     interpolated_points = []
@@ -84,29 +117,6 @@ def remove_outliers(points, threshold=3.0, func=np.mean):
     print(f"Removed {removed_percentage:.2f}% of the data.")
 
     return filtered
-
-def interpolate(points, n=50):
-
-    interpolated_points = []
-    for point in points:
-        x = np.array(point.x, dtype=float)
-        y = np.array(point.y, dtype=float)
-
-        mask = np.isfinite(x) & np.isfinite(y)
-        x, y = x[mask], y[mask]
-        if len(x) < 2:
-            continue
-
-        f = interp1d(x, y, kind='linear', fill_value="extrapolate")
-        x_uniform = np.linspace(x[0], x[-1], n)
-        y_uniform = f(x_uniform)
-
-        params = point.__dict__.copy()
-        params["x"] = x_uniform
-        params["y"] = y_uniform
-        interpolated_points.append(point.__class__(params))
-
-    return interpolated_points
 
 def fourier(points):
 

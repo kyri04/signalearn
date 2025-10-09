@@ -16,16 +16,23 @@ class Series:
         self.title = self.name
         self.filename = self.name
 
-class ClassificationResult:
+class Result:
 
-    def __init__(self, set_params, set_results, set_group_results=None):
+    def __init__(self, set_params, set_volume, set_results, set_group_results=None):
         self.params = set_params
+        self.volume = set_volume
         self.results = set_results
         self.group_results = set_group_results
 
     def format_params(self):
         lines = ["PARAMETERS:"]
         for k, v in vars(self.params).items():
+            lines.append(f"{k}: {v}")
+        return "\n".join(lines)
+    
+    def format_volume(self):
+        lines = ["VOLUME:"]
+        for k, v in vars(self.volume).items():
             lines.append(f"{k}: {v}")
         return "\n".join(lines)
 
@@ -78,5 +85,15 @@ class ClassificationResult:
         return "\n".join(output)
     
     def display_params(self): print(self.format_params())
+    def display_volume(self): print(self.format_volume())
     def display_results(self): print(self.format_results(self.results, title="RESULTS:"))
     def display_group_results(self): print(self.format_results(self.group_results, title="GROUP-LEVEL RESULTS:"))
+    def display(self):
+        self.display_params()
+        print()
+        self.display_volume()
+        print()
+        self.display_results()
+        if self.group_results:
+            print()
+            self.display_group_results()

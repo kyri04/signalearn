@@ -94,6 +94,9 @@ def find_unique(points, attr):
 
     return unique_vals
 
+def count_unique(points, attr):
+    return len(find_unique(points, attr))
+
 def fit_spline(x, y, smooth=None):
 
     x = np.asarray(x, float)

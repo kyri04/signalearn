@@ -1,5 +1,5 @@
 text.usetex: True
-text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}
+text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}\usepackage{lmodern}\DeclareRobustCommand{\AA}{\text{\r{A}}}
 font.family: serif
 font.serif: Computer Modern
 savefig.bbox: tight
