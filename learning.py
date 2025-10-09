@@ -13,7 +13,8 @@ def classify(
     test_size=0.2,
     split_state=42,
     agg_method='mean',
-    agg_group=None
+    agg_group=None,
+    scale=False
 ):
 
     N = len(points)
@@ -38,7 +39,8 @@ def classify(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    else: X_train, X_test = X_train_raw, X_test_raw
 
     model = get_classifier(classifier)
     model.fit(X_train, y_train)
@@ -101,7 +103,8 @@ def shuffle_classify(
     classifier='rf', 
     test_size=0.2,
     shuffles=5,
-    agg_method='mean'
+    agg_method='mean',
+    scale=False
 ):
     results = []
     for rs in range(shuffles):
@@ -113,7 +116,8 @@ def shuffle_classify(
             classifier = classifier, 
             test_size = test_size,  
             split_state = rs,
-            agg_method = agg_method))
+            agg_method = agg_method,
+            scale=scale))
         
     return results
 
@@ -129,7 +133,8 @@ def learning_curve(
     divisions=5,
     start_val=4,
     shuffles_per_split=None,
-    agg_method='mean'
+    agg_method='mean',
+    scale=False
 ):
 
     rng = np.random.default_rng(split_state)
@@ -167,7 +172,8 @@ def learning_curve(
                 classifier=classifier,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                agg_method=agg_method
+                agg_method=agg_method,
+                scale=scale
             )
             f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
             mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
@@ -186,7 +192,8 @@ def learning_curve(
                 classifier=classifier,
                 test_size=test_size,
                 split_state=split_state,
-                agg_method=agg_method
+                agg_method=agg_method,
+                scale=scale
             )
             scores.append(res.results.f1)
             group_scores.append(res.group_results.f1)
@@ -204,7 +211,8 @@ def score_curve(
     divisions=5,
     start_fraction=0.05,
     shuffles_per_split=None,
-    agg_method='mean'
+    agg_method='mean',
+    scale=False
 ):
 
     fractions = np.linspace(start_fraction, 1.0, divisions)
@@ -222,7 +230,8 @@ def score_curve(
                 classifier=classifier,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                agg_method=agg_method
+                agg_method=agg_method,
+                scale=scale
             )
             f1_scores = [res.results.f1 for res in res_list if not np.isnan(res.results.f1)]
             mean_f1 = np.mean(f1_scores) if len(f1_scores) > 0 else np.nan
@@ -241,7 +250,8 @@ def score_curve(
                 classifier=classifier,
                 test_size=test_size,
                 split_state=split_state,
-                agg_method=agg_method
+                agg_method=agg_method,
+                scale=scale
             )
             scores.append(res.results.f1)
             group_scores.append(res.group_results.f1)
