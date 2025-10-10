@@ -36,8 +36,7 @@ def prepare_labels(points, label):
             ["_".join(str(getattr(point, attr)) for attr in label) for point in points],
             dtype=str,
         )
-    else:
-        raise ValueError("label must be either a string or a list")
+
     return labels
 
 def prepare_groups(points, group):
@@ -97,17 +96,15 @@ def calculate_metrics(conf_matrix, average="binary", pos_index=1):
     total_samples = conf_matrix.sum()
     accuracy = np.trace(conf_matrix) / total_samples if total_samples > 0 else None
 
-    # Per-class components
     tps = np.diag(conf_matrix)
-    fns = conf_matrix.sum(axis=1) - tps  # row sums minus tp
-    fps = conf_matrix.sum(axis=0) - tps  # col sums minus tp
+    fns = conf_matrix.sum(axis=1) - tps
+    fps = conf_matrix.sum(axis=0) - tps
     tns = total_samples - (tps + fns + fps)
 
-    # Avoid zero-division: compute with masking
     with np.errstate(divide='ignore', invalid='ignore'):
-        sens = np.where((tps + fns) > 0, tps / (tps + fns), np.nan)   # recall / TPR
-        spec = np.where((tns + fps) > 0, tns / (tns + fps), np.nan)   # TNR
-        prec = np.where((tps + fps) > 0, tps / (tps + fps), np.nan)   # PPV
+        sens = np.where((tps + fns) > 0, tps / (tps + fns), np.nan)
+        spec = np.where((tns + fps) > 0, tns / (tns + fps), np.nan)
+        prec = np.where((tps + fps) > 0, tps / (tps + fps), np.nan)
         f1 = np.where(
             (prec + sens) > 0,
             2 * (prec * sens) / (prec + sens),
@@ -115,16 +112,14 @@ def calculate_metrics(conf_matrix, average="binary", pos_index=1):
         )
 
     if average == "binary":
-        # Return metrics for the designated positive class only
         i = pos_index
         mean_sensitivity = _nan_to_none(sens[i])
-        mean_specificity = _nan_to_none(spec[i])  # specificity wrt positive class = TN/(TN+FP) for that class
+        mean_specificity = _nan_to_none(spec[i])
         mean_precision  = _nan_to_none(prec[i])
         mean_recall     = _nan_to_none(sens[i])
         mean_f1         = _nan_to_none(f1[i])
 
     else:
-        # supports = actual class counts (row sums)
         supports = conf_matrix.sum(axis=1)
         if average == "weighted":
             weights = np.where(supports > 0, supports / supports.sum(), 0.0)
@@ -350,20 +345,9 @@ def combine_volume(results_list):
     return make_namespace(out)
 
 def combine_results(results_list):
-    """
-    Combine a list of ClassificationResult objects (e.g., from shuffle_classify) into one.
-    - Sums confusion matrices across runs and recomputes metrics.
-    - Concatenates y_true / y_score across runs (handles binary & multiclass).
-    - Summarizes params per key:
-        * constant -> single value
-        * numeric  -> (min, max)
-        * other    -> "{a, b, ...}"
-    - Does the same aggregation for group_results when present.
-    """
     if not results_list:
         raise ValueError("combine_results expects a non-empty list of results.")
 
-    # ---- Summarize params across runs ----
     all_param_keys = set()
     for r in results_list:
         all_param_keys.update(vars(r.params).keys())
@@ -403,7 +387,6 @@ def combine_results(results_list):
 
     summarized_params = {k: _summarize(vs) for k, vs in param_values.items()}
 
-    # Ensure unique_labels present; if different across runs, make a union preserving first order
     if "unique_labels" not in summarized_params or summarized_params["unique_labels"] is None:
         if hasattr(results_list[0].params, "unique_labels"):
             summarized_params["unique_labels"] = results_list[0].params.unique_labels
@@ -426,18 +409,15 @@ def combine_results(results_list):
 
     params_ns = make_namespace(summarized_params)
 
-    # ---- Aggregate sample-level results ----
     confs = [r.results.conf_matrix for r in results_list if getattr(r.results, "conf_matrix", None) is not None]
     if not confs:
         raise ValueError("No confusion matrices found in results_list.")
     overall_conf = sum_confusion_matrices(confs)
     acc, spec, sens, prec, rec, f1 = calculate_metrics(overall_conf)
 
-    # Concatenate y_true
     y_true_parts = [r.results.y_true for r in results_list if getattr(r.results, "y_true", None) is not None]
     y_true_all = np.concatenate(y_true_parts) if y_true_parts else None
 
-    # Concatenate y_score (binary 1D vs multiclass 2D)
     y_score_parts = [r.results.y_score for r in results_list if getattr(r.results, "y_score", None) is not None]
     y_score_all = None
     if y_score_parts:
@@ -479,7 +459,6 @@ def combine_results(results_list):
         "y_score":     y_score_all,
     })
 
-    # ---- Aggregate group-level results (if present) ----
     group_results_available = any(getattr(r, "group_results", None) is not None for r in results_list)
     group_ns = None
     if group_results_available:
@@ -491,7 +470,6 @@ def combine_results(results_list):
             overall_gconf = None
             g_acc = g_spec = g_sens = g_prec = g_rec = g_f1 = None
 
-        # Concatenate group y_true / y_score / group_ids when available
         g_ytrue_parts = [r.group_results.y_true for r in results_list if getattr(r.group_results, "y_true", None) is not None]
         g_ytrue_all = np.concatenate(g_ytrue_parts) if g_ytrue_parts else None
 

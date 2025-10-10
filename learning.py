@@ -135,7 +135,7 @@ def shuffle_classify(
         
     return results
 
-def learning_curve(
+def attr_curve(
     points, 
     label, 
     by_attribute,
@@ -183,6 +183,58 @@ def learning_curve(
                 scale=scale
             )
             results.append(combine_results(res_list))
+            
+        else:
+            res = classify(
+                points=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
+                test_size=test_size,
+                split_state=split_state,
+                agg_method=agg_method,
+                scale=scale
+            )
+            results.append(res)
+
+    return results
+
+def data_curve(
+    points, 
+    label, 
+    group=None, 
+    agg_group=None,
+    classifier='rf', 
+    test_size=0.2,
+    split_state=42, 
+    divisions=5,
+    start_fraction=0.05,
+    shuffles_per_split=None,
+    agg_method='mean',
+    scale=False
+):
+
+    fractions = np.linspace(start_fraction, 1.0, divisions)
+    results = []
+
+    for frac in fractions:
+
+        subset = sample(points, frac)
+        if (shuffles_per_split is not None) and (shuffles_per_split > 1):
+            res_list = shuffle_classify(
+                points=subset,
+                label=label,
+                group=group,
+                agg_group=agg_group,
+                classifier=classifier,
+                test_size=test_size,
+                shuffles=shuffles_per_split,
+                agg_method=agg_method,
+                scale=scale
+            )
+            res = combine_results(res_list)
+            results.append(res)
             
         else:
             res = classify(

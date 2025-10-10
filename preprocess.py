@@ -124,7 +124,6 @@ def fourier(points):
         N = len(point.y)
 
         frequencies = rfftfreq(N, d=(point.x[1] - point.x[0]))
-        # amplitudes = rfft(invert(point.y)) * 2.0 / N 
         amplitudes = rfft(point.y) * 2.0 / N 
 
         point.x = frequencies

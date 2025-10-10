@@ -30,7 +30,7 @@ def cleanup():
 
 def get_attributes(cls):
     src = inspect.getsource(cls.__init__)
-    src = textwrap.dedent(src)   # remove leading indentation
+    src = textwrap.dedent(src)
     tree = ast.parse(src)
     return [
         node.targets[0].attr

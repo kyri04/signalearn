@@ -146,16 +146,25 @@ def plot_point(point, func=None):
     return fig, ax
 
 def plot_points_range(points, func=None, q=(0.25, 0.5, 0.75)):
-    import numpy as np, matplotlib.pyplot as plt
+    plt.close('all')
+    fig, ax = plt.subplots()
+
     X = np.asarray(points[0].x)
     Y = np.vstack([(p.y if func is None else func(p.y)) for p in points])
-    q1, med, q3 = np.quantile(Y, q, axis=0)
-    fig, ax = plt.subplots()
-    ax.fill_between(X, q1, q3, alpha=0.25, label='IQR')
-    ax.plot(X, med, lw=1.5, label='Median')
+
+    Y[~np.isfinite(Y)] = np.nan
+    q1, med, q3 = np.nanquantile(Y, q, axis=0)
+
+    m = np.isfinite(q1) & np.isfinite(med) & np.isfinite(q3)
+    ax.fill_between(X[m], q1[m], q3[m], alpha=0.25, label='IQR')
+    ax.plot(X[m], med[m], lw=1.5, label='Median')
+
+    ax.set_yticks([])
     ax.set_xlabel(f'{points[0].xlabel} ({points[0].xunit})')
-    ax.set_ylabel(points[0].ylabel if func is None else f'{func.__name__} {points[0].ylabel}')
-    ax.legend(); fig.tight_layout()
+    ylab = points[0].ylabel if func is None else f'{func.__name__} {points[0].ylabel}'
+    ax.set_ylabel(ylab)
+    ax.legend()
+    fig.tight_layout()
     return fig, ax
 
 def plot_scaled(points, idx=0):
@@ -208,11 +217,11 @@ def plot_func(points, func=np.mean):
 
 def plot_func_difference(points_a, points_b, func=np.mean):
     plt.close('all')
+    fig, ax = plt.subplots()
     y_a = func_y(points_a, func=func)
     y_b = func_y(points_b, func=func)
     y = y_a - y_b
 
-    fig, ax = plt.subplots()
     ax.set_xlabel(f'{points_a[0].xlabel} ({points_a[0].xunit})')
     ax.set_ylabel(f'{points_a[0].ylabel}')
     ax.plot(points_a[0].x, y)
@@ -224,10 +233,10 @@ def plot_func_difference(points_a, points_b, func=np.mean):
 
 def plot_distribution(points, func=np.mean):
     plt.close('all')
-    # Calculate the mean of y values for each point
+    fig, ax = plt.subplots()
+
     values = [func(point.y) for point in points if point.y is not None and len(point.y) > 0]
 
-    fig, ax = plt.subplots(figsize=(8, 6))
     ax.hist(values, bins=int(np.sqrt(len(values))))
     ax.set_xlabel(f'{func.__name__} {points[0].ylabel}')
     ax.set_ylabel('Frequency')
@@ -236,24 +245,18 @@ def plot_distribution(points, func=np.mean):
     return fig, ax
 
 def save_figure(filename, dpi=300, figsize=None, fig: Figure = None):
-    """
-    Save a figure to plots/<filename>. If fig is None, saves the current figure.
-    Usage:
-        fig, ax = plot_point(...)
-        save_figure("out.pdf", fig=fig)
-    or (since we no longer call plt.show()):
-        plot_point(...)
-        save_figure("out.pdf")
-    """
     if fig is None:
         fig = plt.gcf()
     if figsize is not None:
         fig.set_size_inches(figsize)
     os.makedirs('plots', exist_ok=True)
+    save(fig, f"plots/{name_from_path(filename)}.pkl")
     fig.savefig(f"plots/{filename}", bbox_inches='tight', dpi=dpi)
 
 def plot_rocs(results):
     plt.close('all')
+    fig, ax = plt.subplots()
+
     valid = [r.group_results for r in results
              if (r.group_results.y_true is not None and r.group_results.y_score is not None)]
 
@@ -279,7 +282,6 @@ def plot_rocs(results):
     mean_tpr[-1] = 1.0
     mean_auc = np.trapz(mean_tpr, mean_grid)
 
-    fig, ax = plt.subplots()
     for auc, fpr, tpr in roc_data:
         ax.plot(fpr, tpr, linewidth=0.8, alpha=0.2, color=(0.7, 0.7, 0.7))
 
@@ -297,6 +299,8 @@ def plot_rocs(results):
     return fig, ax
 
 def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
+    plt.close('all')
+    fig, ax = plt.subplots()
 
     xs, ys = [], []
     for r in results:
@@ -308,8 +312,6 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     xlabel = f"Number of {volume_attr}"
     ylabel = result_attr.replace('_', ' ').capitalize()
 
-    plt.close('all')
-    fig, ax = plt.subplots()
     ax.scatter(xs, ys, s=12)
     ax.plot(xs, fit_spline(xs, ys)(xs), linestyle="--", color="black")
 
@@ -317,4 +319,3 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     ax.set_ylabel(ylabel)
     fig.tight_layout()
     return fig, ax
-
