@@ -62,6 +62,11 @@ def find_same_attribute(points):
 def make_namespace(d):
     return SimpleNamespace(**d)
 
+def calculate_filtered(points, filtered):
+    removed_count = len(points) - len(filtered)
+    removed_percentage = (removed_count / len(points)) * 100 if points else 0
+    print(f"Removed {removed_percentage:.2f}% of points")
+
 def update_points(points, point_class, params = None):
 
     new_points = []

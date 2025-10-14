@@ -1,9 +1,16 @@
 import random
 import numpy as np
 from signalearn.general_utility import *
+from signalearn.utility import calculate_filtered
 from scipy.fft import *
 from scipy.interpolate import interp1d
 from scipy.stats import zscore
+
+import numpy as np
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import StandardScaler
+from scipy.integrate import trapz
+import matplotlib.pyplot as plt
 
 def sample(points, f=0.05):
     
@@ -102,21 +109,61 @@ def interpolate(points, n=50):
 
     return interpolated_points
 
-def remove_outliers(points, threshold=3.0, func=np.mean):
-
+def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
     if not points:
         return []
 
     values = np.array([func(p.y) for p in points], dtype=float)
-    zs = zscore(values, nan_policy='omit')
+
+    if method == 'zscore':
+        zs = zscore(values, nan_policy='omit')
+    elif method == 'mad':
+        median = np.nanmedian(values)
+        mad = np.nanmedian(np.abs(values - median))
+        if mad == 0:
+            return points
+        zs = 0.67449 * (values - median) / mad
+    else:
+        raise ValueError("method must be 'zscore' or 'mad'")
+
     filtered = [p for p, z in zip(points, zs) if np.abs(z) <= threshold]
 
-    original_count = len(points)
-    removed_count = original_count - len(filtered)
-    removed_percentage = (removed_count / original_count) * 100 if original_count > 0 else 0
-    print(f"Removed {removed_percentage:.2f}% of the data.")
+    calculate_filtered(points, filtered)
 
     return filtered
+
+def gaussian_mix(points, tau=0.9, n_components=2):
+    feats, means = [], []
+    for p in points:
+        y = np.asarray(p.y, float)
+        y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+        m = y.mean()
+        a = trapz(y)
+        s = y.std()
+        mx = y.max()
+
+        eps=1e-9
+        feats.append([np.log(m+eps), np.log(a+eps), s, mx])
+        means.append(m)
+
+    X = np.asarray(feats)
+    scaler = StandardScaler()
+    Xz = scaler.fit_transform(X)
+
+    gmm = GaussianMixture(n_components=n_components, random_state=42)
+    gmm.fit(Xz)
+    post = gmm.predict_proba(Xz)
+
+    empty_comp = np.argmin(gmm.means_[:, 1])
+    p_empty = post[:, empty_comp]
+
+    keep_mask = p_empty < tau
+    kept = [p for p, k in zip(points, keep_mask) if k]
+    dropped = [p for p, k in zip(points, keep_mask) if not k]
+
+    calculate_filtered(points, kept)
+
+    return kept, dropped
 
 def fourier(points):
 

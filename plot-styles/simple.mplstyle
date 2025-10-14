@@ -1,0 +1,44 @@
+text.usetex: True
+text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}\usepackage{lmodern}\DeclareRobustCommand{\AA}{\text{\r{A}}}
+font.family: serif
+font.serif: Computer Modern
+savefig.bbox: tight
+
+axes.spines.right: False
+axes.spines.top: False
+
+savefig.format: pdf
+
+lines.linewidth: 0.8
+axes.linewidth: 0.5
+
+axes.labelsize: 10
+axes.titlesize: 10
+xtick.labelsize: 8
+ytick.labelsize: 8
+legend.fontsize: 8
+mathtext.fontset: cm
+
+ytick.left: False
+ytick.right: False
+ytick.labelleft: True
+ytick.labelright: False
+
+xtick.top: False
+xtick.bottom: False
+xtick.labelbottom: True
+xtick.labeltop: False
+
+xtick.major.pad: 0
+ytick.major.pad: 0
+
+legend.frameon: False
+legend.handlelength: 2
+legend.handletextpad: 0.5
+
+axes.prop_cycle: cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728'])
+
+patch.edgecolor: white
+patch.force_edgecolor: True
+patch.linewidth: 0.5
+patch.facecolor: none

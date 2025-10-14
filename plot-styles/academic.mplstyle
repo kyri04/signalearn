@@ -1,50 +1,38 @@
 text.usetex: True
 text.latex.preamble: \usepackage{amsmath}\usepackage{amssymb}\usepackage{siunitx}\usepackage{lmodern}\DeclareRobustCommand{\AA}{\text{\r{A}}}
-font.family: serif
-font.serif: Computer Modern
-savefig.bbox: tight
+axes.prop_cycle : cycler('color', ['0C5DA5', '00B945', 'FF9500', 'FF2C00', '845B97', '474747', '9e9e9e'])
 
-axes.spines.right: False
-axes.spines.top: False
+figure.figsize : 3.5, 2.625
 
-savefig.format: pdf
+xtick.direction : in
+xtick.major.size : 3
+xtick.major.width : 0.5
+xtick.minor.size : 1.5
+xtick.minor.width : 0.5
+xtick.minor.visible : True
+xtick.top : True
 
-lines.linewidth: 0.8
-axes.linewidth: 0.5
+ytick.direction : in
+ytick.major.size : 3
+ytick.major.width : 0.5
+ytick.minor.size : 1.5
+ytick.minor.width : 0.5
+ytick.minor.visible : True
+ytick.right : True
 
-# --- Font and text ---
-axes.labelsize: 10          # axis label size
-axes.titlesize: 10          # title size (avoid too large)
-xtick.labelsize: 8
-ytick.labelsize: 8
-legend.fontsize: 8
-mathtext.fontset: cm        # consistent math text if LaTeX fails
+axes.grid: True
+grid.alpha: 1
+grid.color: 0.8
+grid.linestyle: --
 
-# --- Hide y-ticks and numbers but keep y-axis label ---
-ytick.left: False        # no tick marks on left
-ytick.right: False       # no tick marks on right
-ytick.labelleft: True   # hide tick labels
-ytick.labelright: False  # hide tick labels on right side
+axes.linewidth : 0.5
+grid.linewidth : 0.5
+lines.linewidth : 1.
 
-# --- Remove tick marks on x but keep numbers + label ---
-xtick.top: False
-xtick.bottom: False      # remove bottom tick marks
-xtick.labelbottom: True  # keep numbers
-xtick.labeltop: False    # no labels on top
+legend.frameon : False
 
-xtick.major.pad: 0
-ytick.major.pad: 0
+savefig.bbox : tight
+savefig.pad_inches : 0.05
 
-# --- Legend ---
-legend.frameon: False       # cleaner legend
-legend.handlelength: 2
-legend.handletextpad: 0.5
-
-# --- Colors ---
-axes.prop_cycle: cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728'])
-
-# --- Crisp histogram bars (Rectangles are Patches) ---
-patch.edgecolor: white
-patch.force_edgecolor: True
-patch.linewidth: 0.5
-patch.facecolor: none          # outlines only; change to '#e0e0e0' for subtle fill
+font.family : serif
+mathtext.fontset : dejavuserif
