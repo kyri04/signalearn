@@ -1,6 +1,5 @@
 import os
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 import numpy as np
 from signalearn.learning_utility import reduce, scale
 from signalearn.utility import *

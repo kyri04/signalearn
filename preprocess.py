@@ -9,8 +9,7 @@ from scipy.stats import zscore
 import numpy as np
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
-from scipy.integrate import trapz
-import matplotlib.pyplot as plt
+from numpy import trapz
 
 def sample(points, f=0.05):
     
