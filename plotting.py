@@ -5,28 +5,17 @@ from signalearn.learning_utility import reduce, scale
 from signalearn.utility import *
 from signalearn.preprocess import func_y
 from sklearn.metrics import roc_curve, roc_auc_score
+from matplotlib.colors import ListedColormap
+from matplotlib.patches import Patch
 
-from plot_serializer.matplotlib.serializer import MatplotlibSerializer
-from plot_serializer.matplotlib.deserializer import deserialize_from_json_file
-
-def deserialize_plot(filename):
-    return deserialize_from_json_file(f"plots/{filename}")
-
-def serialize_plot(serializer, filename, export=True):
-    os.makedirs('plots', exist_ok=True)
-    serializer.write_json_file(f"plots/{name_from_path(filename)}.json") 
-    if export: export_plot(serializer, filename)
-
-def export_plot(serializer, filename, dpi=300):
-    fig = serializer._figure
-
+def save_plot(plot, filename, dpi=300, extension='pdf'):
+    fig = plot[0]
     os.makedirs('plots/export', exist_ok=True)
-    fig.savefig(f"plots/{filename}", bbox_inches='tight', dpi=dpi)
+    fig.savefig(f"plots/{filename}.{extension}", bbox_inches='tight', dpi=dpi)
 
 def plot_importances(result, points=None, func=None):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     if isinstance(result, list):
         importances = []
         first = None
@@ -75,7 +64,8 @@ def plot_importances(result, points=None, func=None):
     if points:
         ax.legend()
     fig.tight_layout()
-    return serializer
+    return fig, ax
+
 def plot_pca(points, label=None, n_components=2):
     plt.close('all')
     if n_components not in [2, 3]:
@@ -105,8 +95,7 @@ def plot_pca(points, label=None, n_components=2):
     y_reduced = reduce(y, n_components)
 
     if n_components == 2:
-        serializer = MatplotlibSerializer()
-        fig, ax = serializer.subplots()
+        fig, ax = plt.subplots()
         scatter = ax.scatter(
             y_reduced[:, 0],
             y_reduced[:, 1],
@@ -147,12 +136,11 @@ def plot_pca(points, label=None, n_components=2):
         ax.add_artist(legend1)
 
     fig.tight_layout()
-    return serializer
+    return fig, ax
 
 def plot_point(point, func=None):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
 
     ax.set_yticks([])
     ax.set_xlabel(f'{point.xlabel} ({point.xunit})')
@@ -160,7 +148,7 @@ def plot_point(point, func=None):
     ax.plot(point.x, point.y if func is None else func(point.y))
 
     fig.tight_layout()
-    return serializer
+    return fig, ax
 
 def plot_points_range(points, func=None, q=(0.25, 0.5, 0.75)):
     plt.close('all')
@@ -188,19 +176,18 @@ def plot_scaled(points, idx=0):
     ys_scaled = scale(np.array([point.y for point in points]))
 
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     ax.set_yticklabels([])
     ax.set_xlabel(f'{points[idx].xlabel} ({points[idx].xunit})')
     ax.set_ylabel(f'Standardised {points[idx].ylabel}')
     ax.plot(points[idx].x, ys_scaled[0])
 
     fig.tight_layout()
-    return serializer
+    return plt
+
 def plot_points(points, func=None, offset=0.1):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     for i, p in enumerate(points):
         y = p.y if func is None else func(p.y)
         if offset:
@@ -214,15 +201,14 @@ def plot_points(points, func=None, offset=0.1):
     ax.margins(x=0)
 
     fig.tight_layout()
-    return serializer
+    return fig, ax
 
 def plot_func(points, func=np.mean):
     plt.close('all')
     attr, first_val = find_same_attribute(points)
     y = func_y(points, func=func)
 
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     ax.set_xlabel(f'{points[0].xlabel} ({points[0].xunit})')
     ax.set_ylabel(f'{points[0].ylabel}')
     ax.plot(points[0].x, y)
@@ -230,12 +216,11 @@ def plot_func(points, func=np.mean):
     # ax.set_title(f"{func.__name__.capitalize()} of Points with {attr}={first_val}")
 
     fig.tight_layout()
-    return serializer
+    return fig, ax
 
 def plot_func_difference(points_a, points_b, func=np.mean):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     y_a = func_y(points_a, func=func)
     y_b = func_y(points_b, func=func)
     y = y_a - y_b
@@ -247,12 +232,11 @@ def plot_func_difference(points_a, points_b, func=np.mean):
     # ax.set_title(f"{func.__name__.capitalize()} Difference")
 
     fig.tight_layout()
-    return serializer
+    return plt
 
 def plot_distribution(points, yfunc=np.mean, func=None):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
     groups = points if is_grouped else [points]
 
@@ -264,6 +248,8 @@ def plot_distribution(points, yfunc=np.mean, func=None):
     group_values = [values_from(g) for g in groups]
     values = np.concatenate(group_values) if group_values else np.array([])
     n = max(5, int(np.sqrt(len(values)))) if len(values) > 0 else 5
+
+    values = values[np.isfinite(values)]
     counts, bins = np.histogram(values, bins=n)
 
     ax.hist(values, bins=bins, alpha=0.35, label="All", color="tab:gray")
@@ -284,12 +270,11 @@ def plot_distribution(points, yfunc=np.mean, func=None):
         ax.legend()
     fig.tight_layout()
 
-    return serializer
+    return fig, ax
 
 def plot_rocs(results):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     valid = [r.group_results for r in results
              if (r.group_results.y_true is not None and r.group_results.y_score is not None)]
 
@@ -329,12 +314,11 @@ def plot_rocs(results):
     ax.legend(loc="lower right")
 
     fig.tight_layout()
-    return serializer
+    return fig, ax
 
 def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     plt.close('all')
-    serializer = MatplotlibSerializer()
-    fig, ax = serializer.subplots()
+    fig, ax = plt.subplots()
     xs, ys = [], []
     for r in results:
         x = getattr(r.volume, volume_attr, None)
@@ -351,4 +335,86 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     fig.tight_layout()
-    return serializer
+    return fig, ax
+
+def plot_grid(points, xattr, yattr):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
+    groups = points if is_grouped else [points]
+
+    cells = {}
+    x_max = 0
+    y_max = 0
+
+    for gi, group in enumerate(groups):
+        for p in group:
+            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
+            x_max = max(x_max, x); y_max = max(y_max, y)
+            cells.setdefault((y, x), []).append(gi)
+    class_names = [f"Group {i+1}" for i in range(len(groups))]
+    n_classes = max(1, len(groups))
+
+    grid = np.full((y_max, x_max), np.nan, float)
+    for (y, x), codes in cells.items():
+        vals, counts = np.unique(codes, return_counts=True)
+        grid[y-1, x-1] = float(vals[np.argmax(counts)])
+
+    cycle = plt.rcParams.get('axes.prop_cycle')
+    cycle = cycle.by_key().get('color', []) if cycle else []
+    if not cycle:
+        cycle = plt.get_cmap('tab10').colors
+    colors = [cycle[i % len(cycle)] for i in range(n_classes)]
+    cmap = ListedColormap(colors)
+    cmap.set_bad((0, 0, 0, 0))
+
+    x_edges = np.arange(0, x_max + 1)
+    y_edges = np.arange(0, y_max + 1)
+    ax.pcolormesh(x_edges, y_edges, grid, cmap=cmap, vmin=-0.5, vmax=n_classes-0.5, shading='flat')
+
+    ax.set_xlim(0, x_max)
+    ax.set_ylim(0, y_max)
+    ax.set_aspect('equal')
+
+    ax.set_xticks(np.arange(0.5, x_max + 0.5, 1.0))
+    ax.set_yticks(np.arange(0.5, y_max + 0.5, 1.0))
+    ax.set_xticklabels([str(i) for i in range(1, x_max + 1)])
+    ax.set_yticklabels([str(i) for i in range(1, y_max + 1)])
+    ax.set_xticks(np.arange(0, x_max + 1), minor=True)
+    ax.set_yticks(np.arange(0, y_max + 1), minor=True)
+    ax.grid(True, which='minor')
+    ax.grid(False, which='major')
+    ax.tick_params(which='minor', length=0)
+
+    ax.set_xlabel(xattr)
+    ax.set_ylabel(yattr)
+
+    ax.tick_params(axis='both', which='major', labelsize=6)
+
+    for xt in ax.get_xticklabels():
+        xt.set_rotation(90)
+        xt.set_horizontalalignment('center')
+
+    present = np.unique(grid[~np.isnan(grid)]).astype(int) if np.any(~np.isnan(grid)) else []
+       
+    if is_grouped and len(groups) > 1 and len(present) > 0:
+        handles = [Patch(label=class_names[c], facecolor=cmap(c), edgecolor='black', linewidth=0.8) for c in present]
+
+        ax.legend(
+            handles=handles, 
+            frameon=True,
+            loc='lower left',
+            mode='expand',
+            borderaxespad=0,
+            bbox_to_anchor=(0, 1.02, 1, 0.2),
+            handlelength=0.7,
+            handletextpad=0.45,
+            ncol=len(points),
+            fancybox=True
+        )
+
+    fig.tight_layout()
+    return fig, ax
+
+

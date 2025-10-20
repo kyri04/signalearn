@@ -131,7 +131,7 @@ def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
 
     return filtered
 
-def gaussian_mix(points, tau=0.9, n_components=2):
+def gaussian_mix(points, tau=0.9):
     feats, means = [], []
     for p in points:
         y = np.asarray(p.y, float)
@@ -146,10 +146,12 @@ def gaussian_mix(points, tau=0.9, n_components=2):
         means.append(m)
 
     X = np.asarray(feats)
+    m = np.isfinite(X).all(axis=1)
+    X = X[m]
     scaler = StandardScaler()
     Xz = scaler.fit_transform(X)
 
-    gmm = GaussianMixture(n_components=n_components, random_state=42)
+    gmm = GaussianMixture(n_components=2, random_state=42)
     gmm.fit(Xz)
     post = gmm.predict_proba(Xz)
 
@@ -165,7 +167,6 @@ def gaussian_mix(points, tau=0.9, n_components=2):
     return kept, dropped
 
 def fourier(points):
-
     for point in points:
         N = len(point.y)
 
