@@ -100,7 +100,7 @@ def find_unique(points, attr):
     else:
         raise ValueError("label must be either a string or a list")
 
-    return unique_vals
+    return list(unique_vals)
 
 def count_unique(points, attr):
     return len(find_unique(points, attr))
@@ -139,3 +139,65 @@ def grid_num_to_xy(grid_number, total_cells, snake=False, zero_based=True):
 
     grid_y = row + 1
     return grid_x, grid_y
+
+import numpy as np
+
+def grid_boundaries(points, xattr, yattr, sizeattr, include_empty=True, exclude_edges=True):
+    """
+    1-based coords: x,y in [1..W],[1..H] where [W,H] = getattr(point, sizeattr).
+    Returns N lists (one per group) of boundary points. 
+    """
+    # normalize to list-of-groups
+    is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
+    groups = points if is_grouped else [points]
+
+    # grid size (W,H) from first point
+    W, H = map(int, getattr(groups[0][0], sizeattr))
+
+    # votes per 1-based cell
+    cell_codes = {}
+    for gi, group in enumerate(groups):
+        for p in group:
+            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
+            if 1 <= x <= W and 1 <= y <= H:
+                cell_codes.setdefault((y, x), []).append(gi)
+
+    # build 0-based grid
+    grid = np.full((H, W), np.nan)
+    for (y, x), codes in cell_codes.items():
+        y0, x0 = y-1, x-1
+        vals, counts = np.unique(codes, return_counts=True)
+        grid[y0, x0] = float(vals[np.argmax(counts)])
+
+    # boundary mask (4-neighborhood)
+    boundary = np.zeros_like(grid, dtype=bool)
+    nbrs = [(-1,0),(1,0),(0,-1),(0,1)]
+    for y0 in range(H):
+        for x0 in range(W):
+            cur = grid[y0, x0]
+            if np.isnan(cur): 
+                continue
+            for dy, dx in nbrs:
+                ny, nx = y0+dy, x0+dx
+                if 0 <= ny < H and 0 <= nx < W:
+                    nb = grid[ny, nx]
+                    if (not np.isnan(nb) and nb != cur) or (include_empty and np.isnan(nb)):
+                        boundary[y0, x0] = True; break
+                else:
+                    if include_empty:
+                        boundary[y0, x0] = True; break
+
+    # collect boundary points, excluding 1-based outer frame if requested
+    out = []
+    for gi, group in enumerate(groups):
+        pts = []
+        for p in group:
+            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
+            if not (1 <= x <= W and 1 <= y <= H):
+                continue
+            if exclude_edges and (x == 1 or x == W or y == 1 or y == H):
+                continue
+            if boundary[y-1, x-1]:
+                pts.append(p)
+        out.append(pts)
+    return out

@@ -337,7 +337,7 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     fig.tight_layout()
     return fig, ax
 
-def plot_grid(points, xattr, yattr):
+def plot_grid(points, xattr, yattr, sizeattr):
     plt.close('all')
     fig, ax = plt.subplots()
 
@@ -345,14 +345,17 @@ def plot_grid(points, xattr, yattr):
     groups = points if is_grouped else [points]
 
     cells = {}
-    x_max = 0
-    y_max = 0
+
+    grid_size = getattr(groups[0][0], sizeattr)
+    x_max = grid_size[0]
+    y_max = grid_size[1]
 
     for gi, group in enumerate(groups):
         for p in group:
             x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
-            x_max = max(x_max, x); y_max = max(y_max, y)
+            # x_max = max(x_max, x); y_max = max(y_max, y)
             cells.setdefault((y, x), []).append(gi)
+
     class_names = [f"Group {i+1}" for i in range(len(groups))]
     n_classes = max(1, len(groups))
 
@@ -373,46 +376,26 @@ def plot_grid(points, xattr, yattr):
     y_edges = np.arange(0, y_max + 1)
     ax.pcolormesh(x_edges, y_edges, grid, cmap=cmap, vmin=-0.5, vmax=n_classes-0.5, shading='flat')
 
-    ax.set_xlim(0, x_max)
-    ax.set_ylim(0, y_max)
-    ax.set_aspect('equal')
-
+    ax.set_xlim(0, x_max); ax.set_ylim(0, y_max); ax.set_aspect('equal')
     ax.set_xticks(np.arange(0.5, x_max + 0.5, 1.0))
     ax.set_yticks(np.arange(0.5, y_max + 0.5, 1.0))
     ax.set_xticklabels([str(i) for i in range(1, x_max + 1)])
     ax.set_yticklabels([str(i) for i in range(1, y_max + 1)])
     ax.set_xticks(np.arange(0, x_max + 1), minor=True)
     ax.set_yticks(np.arange(0, y_max + 1), minor=True)
-    ax.grid(True, which='minor')
-    ax.grid(False, which='major')
+    ax.grid(True, which='minor'); ax.grid(False, which='major')
     ax.tick_params(which='minor', length=0)
-
-    ax.set_xlabel(xattr)
-    ax.set_ylabel(yattr)
-
+    ax.set_xlabel(xattr); ax.set_ylabel(yattr)
     ax.tick_params(axis='both', which='major', labelsize=6)
-
     for xt in ax.get_xticklabels():
-        xt.set_rotation(90)
-        xt.set_horizontalalignment('center')
+        xt.set_rotation(90); xt.set_horizontalalignment('center')
 
     present = np.unique(grid[~np.isnan(grid)]).astype(int) if np.any(~np.isnan(grid)) else []
-       
-    if is_grouped and len(groups) > 1 and len(present) > 0:
+    if len(groups) > 1 and len(present) > 0:
         handles = [Patch(label=class_names[c], facecolor=cmap(c), edgecolor='black', linewidth=0.8) for c in present]
-
-        ax.legend(
-            handles=handles, 
-            frameon=True,
-            loc='lower left',
-            mode='expand',
-            borderaxespad=0,
-            bbox_to_anchor=(0, 1.02, 1, 0.2),
-            handlelength=0.7,
-            handletextpad=0.45,
-            ncol=len(points),
-            fancybox=True
-        )
+        ax.legend(handles=handles, frameon=True, loc='lower left', mode='expand',
+                  borderaxespad=0, bbox_to_anchor=(0, 1.02, 1, 0.2),
+                  handlelength=0.7, handletextpad=0.45, ncol=len(present), fancybox=True)
 
     fig.tight_layout()
     return fig, ax
