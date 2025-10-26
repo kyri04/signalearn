@@ -2,22 +2,18 @@ import numpy as np
 from numbers import Number
 
 class Series:
-        
     def __init__(self, parameters):
+        for k, v in parameters.items():
+            setattr(self, k, v)
+        self.x = None
+        self.xlabel = ''
+        self.xunit = ''
 
-        self.name = parameters['name']
-        self.xlabel = parameters['xlabel']
-        self.ylabel = parameters['ylabel']
-        self.xunit = parameters['xunit']
-        self.yunit = parameters['yunit']
-        self.x = parameters['x']
-        self.y = parameters['y']
-
-        self.title = self.name
-        self.filename = self.name
+        self.y = None
+        self.ylabel = ''
+        self.yunit = ''
 
 class Result:
-
     def __init__(self, set_params, set_volume, set_results, set_group_results=None):
         self.params = set_params
         self.volume = set_volume

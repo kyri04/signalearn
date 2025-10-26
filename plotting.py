@@ -68,8 +68,6 @@ def plot_importances(result, points=None, func=None):
 
 def plot_pca(points, label=None, n_components=2):
     plt.close('all')
-    if n_components not in [2, 3]:
-        raise ValueError("n_components must be either 2 or 3.")
     y = [point.y for point in points]
 
     labels = None
@@ -138,17 +136,58 @@ def plot_pca(points, label=None, n_components=2):
     fig.tight_layout()
     return fig, ax
 
+def _norm(point):
+    xs = point.x
+    ys = point.y
+    xl = point.xlabel
+    xu = point.xunit
+    yl = point.ylabel
+    yu = point.yunit
+
+    if isinstance(xs, np.ndarray): xs = [xs]
+    if isinstance(ys, np.ndarray): ys = [ys if ys.ndim == 2 else ys[None, :]]
+    if isinstance(xl, str): xl = [xl]
+    if isinstance(xu, str): xu = [xu]
+    if isinstance(yl, list) and yl and isinstance(yl[0], str): yl = [yl]
+    if isinstance(yu, list) and yu and isinstance(yu[0], str): yu = [yu]
+    return xs, ys, xl, xu, yl, yu
+
 def plot_point(point, func=None):
     plt.close('all')
-    fig, ax = plt.subplots()
+    xs, ys, xlabs, xunits, ylabs, yunits = _norm(point)
+    n = len(xs)
 
-    ax.set_yticks([])
-    ax.set_xlabel(f'{point.xlabel} ({point.xunit})')
-    ax.set_ylabel(point.ylabel if func is None else func.__name__ + ' ' + point.ylabel)
-    ax.plot(point.x, point.y if func is None else func(point.y))
+    fig, axes = plt.subplots(n, 1, figsize=(6, 3*n))
+    if n == 1:
+        axes = [axes]
+
+    for i, ax in enumerate(axes):
+        X = np.asarray(xs[i])
+        Y = ys[i]
+        if Y.ndim == 1: Y = Y[None, :]
+        rows = [func(row) if func is not None else row for row in Y]
+        for r in rows:
+            ax.plot(X, r)
+        ax.set_yticks([])
+        xlab = xlabs[i] if xlabs[i] is not None else ""
+        xunit = xunits[i] if xunits[i] is not None else ""
+        ax.set_xlabel(f"{xlab} ({xunit})" if xunit else xlab)
+
+        ylab_list = ylabs[i] if ylabs[i] is not None else []
+        yunit_list = yunits[i] if yunits[i] is not None else []
+        if yunit_list and len(yunit_list) == len(ylab_list):
+            ylab = ", ".join(f"{a}" for a in ylab_list)
+        else:
+            ylab = ", ".join(ylab_list)
+        if ylab:
+            prefix = (func.__name__ + " ") if func is not None else ""
+            ax.set_ylabel(prefix + ylab)
+
+        if len(ylab_list) > 1:
+            ax.legend(ylab_list, loc="best", frameon=False)
 
     fig.tight_layout()
-    return fig, ax
+    return fig, axes
 
 def plot_points_range(points, func=None, q=(0.25, 0.5, 0.75)):
     plt.close('all')

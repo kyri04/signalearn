@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import gc
+import re
 import inspect, ast, textwrap
 
 def name_from_path(filepath):
@@ -11,6 +12,12 @@ def invert(y):
         y[i] = - y[i]
 
     return y
+
+def snake(s: str):
+    s = s.strip()
+    s = re.sub(r"[^0-9A-Za-z]+", "_", s)
+    s = re.sub(r"_+", "_", s)
+    return s.strip("_").lower()
 
 def remove_trailing_letters(s):
     
