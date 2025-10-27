@@ -16,51 +16,6 @@ def _label_unit(p, attr):
         h = re.sub(rf"\s*[\(\[]\s*{re.escape(u)}\s*[\)\]]\s*$", "", str(h))
     return h, u
 
-def set_active(points, x, y):
-    pts = points if isinstance(points, (list, tuple)) else [points]
-
-    def block_for_axis(p, x_name, y_names):
-        ax = np.asarray(getattr(p, x_name)); 
-        if ax.ndim != 1: raise ValueError("x must be 1D")
-        mats, labs, units = [], [], []
-        for feat in y_names:
-            arr = np.asarray(getattr(p, feat))
-            if arr.ndim != 1 or arr.shape[0] != ax.shape[0]:
-                raise ValueError(f"feature '{feat}' must be 1D and match x length")
-            mats.append(arr)
-            lab, uni = _label_unit(p, feat); labs.append(lab); units.append(uni)
-        y_block = np.vstack(mats)  # (C,N)
-        xl, xu = _label_unit(p, x_name)
-        return ax, y_block, xl, xu, labs, units
-
-    for p in pts:
-        if isinstance(x, str):
-            y_names = [y] if isinstance(y, str) else list(y)
-            ax, yblk, xl, xu, ylabs, yunits = block_for_axis(p, x, y_names)
-            p.x      = [ax]
-            p.y      = [yblk]          # <-- list containing the 2D block
-            p.xlabel = [xl]
-            p.xunit  = [xu]
-            p.ylabel = [ylabs]         # <-- list of lists
-            p.yunit  = [yunits]        # <-- list of lists
-        else:
-            if not isinstance(x, (list, tuple)) or not isinstance(y, (list, tuple)):
-                raise ValueError("x must be str or list; y must match (str/list or list-of-lists)")
-            if any(not isinstance(ys, (list, tuple)) for ys in y) or len(x) != len(y):
-                raise ValueError("when x is a list, y must be a list of lists with equal length")
-            xs, ys, xls, xus, yls, yus = [], [], [], [], [], []
-            for xn, ynames in zip(x, y):
-                ax, yblk, xl, xu, ylabs, yunits = block_for_axis(p, xn, list(ynames))
-                xs.append(ax); ys.append(yblk)
-                xls.append(xl); xus.append(xu)
-                yls.append(ylabs); yus.append(yunits)
-            p.x      = xs
-            p.y      = ys              # list of 2D blocks
-            p.xlabel = xls
-            p.xunit  = xus
-            p.ylabel = yls             # list of lists
-            p.yunit  = yus             # list of lists
-
 def read_map(map_path):
     with open(map_path, mode='r', encoding='utf-8') as file:
         reader = csv.DictReader(file, delimiter='\t')

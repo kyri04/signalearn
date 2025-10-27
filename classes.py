@@ -5,13 +5,6 @@ class Series:
     def __init__(self, parameters):
         for k, v in parameters.items():
             setattr(self, k, v)
-        self.x = None
-        self.xlabel = ''
-        self.xunit = ''
-
-        self.y = None
-        self.ylabel = ''
-        self.yunit = ''
 
 class Result:
     def __init__(self, set_params, set_volume, set_results, set_group_results=None):
