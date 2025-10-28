@@ -7,16 +7,13 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.pipeline import Pipeline
 from sklearn.metrics import confusion_matrix
-
 from sklearn.preprocessing import StandardScaler
-from collections import defaultdict
 
 from collections import Counter
-from signalearn.classes import Result
-
 import numpy as np
+
+from signalearn.classes import Result
 from signalearn.utility import *
 
 def reduce(y, n_components=2):
@@ -344,184 +341,152 @@ def combine_volume(results_list):
 
     return make_namespace(out)
 
-def combine_results(results_list):
-    if not results_list:
-        raise ValueError("combine_results expects a non-empty list of results.")
+def combine_results(results):
+    first = results[0]
 
-    all_param_keys = set()
-    for r in results_list:
-        all_param_keys.update(vars(r.params).keys())
+    metrics = ["accuracy", "precision", "recall",
+               "specificity", "sensitivity", "f1"]
 
-    param_values = {k: [] for k in all_param_keys}
-    for r in results_list:
-        rp = vars(r.params)
-        for k in all_param_keys:
-            param_values[k].append(rp.get(k, None))
-
-    def _is_number(x):
-        return isinstance(x, (int, float, np.integer, np.floating))
-
-    def _all_equal(xs):
-        if not xs:
-            return True
-        first = xs[0]
-        for v in xs[1:]:
-            if isinstance(v, np.ndarray) and isinstance(first, np.ndarray):
-                if not np.array_equal(v, first):
-                    return False
-            else:
-                if v != first:
-                    return False
-        return True
-
-    def _summarize(vals):
-        xs = [v for v in vals if v is not None]
-        if len(xs) == 0:
+    agg_metrics = {}
+    for m in metrics:
+        vals = [
+            getattr(r.results, m, None)
+            for r in results
+            if getattr(r.results, m, None) is not None
+        ]
+        arr = np.array(vals, dtype=float)
+        if arr.size == 0:
             return None
-        if _all_equal(xs):
-            return xs[0]
-        if all(_is_number(v) for v in xs):
-            return (min(xs), max(xs))
-        uniq = sorted({str(v) for v in xs})
-        return "{" + ", ".join(uniq) + "}"
+        agg_metrics[m] = float(np.nanmean(arr))
 
-    summarized_params = {k: _summarize(vs) for k, vs in param_values.items()}
+    conf_mats = [
+        r.meta.conf_matrix
+        for r in results
+        if getattr(r.meta, "conf_matrix", None) is not None
+    ]
+    if conf_mats:
+        combined_conf_mat = np.sum(conf_mats, axis=0)
+    else:
+        combined_conf_mat = None
 
-    if "unique_labels" not in summarized_params or summarized_params["unique_labels"] is None:
-        if hasattr(results_list[0].params, "unique_labels"):
-            summarized_params["unique_labels"] = results_list[0].params.unique_labels
+    y_trues = [
+        np.asarray(r.meta.y_true)
+        for r in results
+        if getattr(r.meta, "y_true", None) is not None
+    ]
+    y_scores = [
+        np.asarray(r.meta.y_score)
+        for r in results
+        if getattr(r.meta, "y_score", None) is not None
+    ]
+    test_indices = [
+        np.asarray(r.meta.test_index)
+        for r in results
+        if getattr(r.meta, "test_index", None) is not None
+    ]
 
-    try:
-        first_ul = np.array(results_list[0].params.unique_labels, dtype=object)
-        unions = list(first_ul)
-        seen = set(unions)
-        for r in results_list[1:]:
-            ul = getattr(r.params, "unique_labels", None)
-            if ul is None:
-                continue
-            for x in ul:
-                if x not in seen:
-                    unions.append(x)
-                    seen.add(x)
-        summarized_params["unique_labels"] = np.array(unions, dtype=object)
-    except Exception:
-        pass
+    merged_test_meta = {}
+    if getattr(first.meta, "test_meta", None) is not None:
+        for key in first.meta.test_meta.keys():
+            merged_test_meta[key] = np.concatenate(
+                [
+                    np.asarray(r.meta.test_meta[key])
+                    for r in results
+                    if getattr(r.meta, "test_meta", None) is not None
+                       and key in r.meta.test_meta
+                ],
+                axis=0
+            )
 
-    params_ns = make_namespace(summarized_params)
-
-    confs = [r.results.conf_matrix for r in results_list if getattr(r.results, "conf_matrix", None) is not None]
-    if not confs:
-        raise ValueError("No confusion matrices found in results_list.")
-    overall_conf = sum_confusion_matrices(confs)
-    acc, spec, sens, prec, rec, f1 = calculate_metrics(overall_conf)
-
-    y_true_parts = [r.results.y_true for r in results_list if getattr(r.results, "y_true", None) is not None]
-    y_true_all = np.concatenate(y_true_parts) if y_true_parts else None
-
-    y_score_parts = [r.results.y_score for r in results_list if getattr(r.results, "y_score", None) is not None]
-    y_score_all = None
-    if y_score_parts:
-        n_classes = overall_conf.shape[0]
-        if n_classes == 2:
-            normalized = []
-            for s in y_score_parts:
-                s = np.asarray(s)
-                if s.ndim == 1:
-                    normalized.append(s)
-                elif s.ndim == 2 and s.shape[1] == 2:
-                    normalized.append(s[:, 1])
-                else:
-                    normalized.append(s.reshape(s.shape[0], -1)[:, -1])
-            y_score_all = np.concatenate(normalized)
+    feat_imps = [
+        np.asarray(r.meta.feature_importances)
+        for r in results
+        if getattr(r.meta, "feature_importances", None) is not None
+    ]
+    if feat_imps:
+        shapes = {fi.shape for fi in feat_imps}
+        if len(shapes) == 1:
+            combined_feat_imp = np.mean(feat_imps, axis=0)
         else:
-            normalized = []
-            for s in y_score_parts:
-                s = np.asarray(s)
-                if s.ndim == 1:
-                    s = s.reshape(-1, 1)
-                if s.shape[1] != n_classes:
-                    tmp = np.zeros((s.shape[0], n_classes), dtype=float)
-                    m = min(n_classes, s.shape[1])
-                    tmp[:, :m] = s[:, :m]
-                    s = tmp
-                normalized.append(s)
-            y_score_all = np.vstack(normalized)
+            combined_feat_imp = None
+    else:
+        combined_feat_imp = None
 
-    results_ns = make_namespace({
-        "accuracy":    acc,
-        "specificity": spec,
-        "sensitivity": sens,
-        "precision":   prec,
-        "recall":      rec,
-        "f1":          f1,
-        "conf_matrix": overall_conf,
-        "y_true":      y_true_all,
-        "y_score":     y_score_all,
+    combined_meta_ns = make_namespace({
+        "conf_matrix": combined_conf_mat,
+        "y_true": np.concatenate(y_trues, axis=0) if y_trues else None,
+        "y_score": np.concatenate(y_scores, axis=0) if y_scores else None,
+        "feature_importances": combined_feat_imp,
+        "test_index": np.concatenate(test_indices, axis=0) if test_indices else None,
+        "test_meta": merged_test_meta if merged_test_meta else None,
+        "model": results[0].params.model,
     })
 
-    group_results_available = any(getattr(r, "group_results", None) is not None for r in results_list)
-    group_ns = None
-    if group_results_available:
-        g_confs = [r.group_results.conf_matrix for r in results_list if getattr(r.group_results, "conf_matrix", None) is not None]
-        if g_confs:
-            overall_gconf = sum_confusion_matrices(g_confs)
-            g_acc, g_spec, g_sens, g_prec, g_rec, g_f1 = calculate_metrics(overall_gconf)
-        else:
-            overall_gconf = None
-            g_acc = g_spec = g_sens = g_prec = g_rec = g_f1 = None
+    combined_params_ns = make_namespace({
+        **vars(first.params),
+        "mode": f"{getattr(first.params, 'mode', 'sample')}_combined",
+        "num_results": len(results),
+    })
 
-        g_ytrue_parts = [r.group_results.y_true for r in results_list if getattr(r.group_results, "y_true", None) is not None]
-        g_ytrue_all = np.concatenate(g_ytrue_parts) if g_ytrue_parts else None
+    combined_volume_ns = make_namespace({
+        **vars(first.volume)
+    })
 
-        g_score_parts = [r.group_results.y_score for r in results_list if getattr(r.group_results, "y_score", None) is not None]
-        g_score_all = None
-        if g_score_parts:
-            n_classes = overall_conf.shape[0] if overall_conf is not None else len(params_ns.unique_labels)
-            if n_classes == 2:
-                normalized = []
-                for s in g_score_parts:
-                    s = np.asarray(s)
-                    if s.ndim == 1:
-                        normalized.append(s)
-                    elif s.ndim == 2 and s.shape[1] == 2:
-                        normalized.append(s[:, 1])
-                    else:
-                        normalized.append(s.reshape(s.shape[0], -1)[:, -1])
-                g_score_all = np.concatenate(normalized)
-            else:
-                normalized = []
-                for s in g_score_parts:
-                    s = np.asarray(s)
-                    if s.ndim == 1:
-                        s = s.reshape(-1, 1)
-                    if s.shape[1] != n_classes:
-                        tmp = np.zeros((s.shape[0], n_classes), dtype=float)
-                        m = min(n_classes, s.shape[1])
-                        tmp[:, :m] = s[:, :m]
-                        s = tmp
-                    normalized.append(s)
-                g_score_all = np.vstack(normalized)
+    combined_results_ns = make_namespace({
+        "accuracy":     agg_metrics["accuracy"],
+        "precision":    agg_metrics["precision"],
+        "recall":       agg_metrics["recall"],
+        "specificity":  agg_metrics["specificity"],
+        "sensitivity":  agg_metrics["sensitivity"],
+        "f1":           agg_metrics["f1"],
+    })
 
-        g_ids_parts = [r.group_results.group_ids for r in results_list if getattr(r.group_results, "group_ids", None) is not None]
-        g_ids_all = np.concatenate(g_ids_parts) if g_ids_parts else None
+    combined_res = Result(
+        set_params = combined_params_ns,
+        set_volume = combined_volume_ns,
+        set_results = combined_results_ns,
+        set_meta = combined_meta_ns
+    )
 
-        group_ns = make_namespace({
-            "accuracy":    g_acc,
-            "specificity": g_spec,
-            "sensitivity": g_sens,
-            "precision":   g_prec,
-            "recall":      g_rec,
-            "f1":          g_f1,
-            "conf_matrix": overall_gconf,
-            "y_true":      g_ytrue_all,
-            "y_score":     g_score_all,
-            "group_ids":   g_ids_all,
-        })
+    return combined_res
 
-    vol_ns = combine_volume(results_list)
+def aggregate_result(
+    res,
+    agg_group,
+    agg_method = "mean",
+    threshold = 0.5,
+    proportion = None
+):
+
+    y_true  = np.asarray(res.results.y_true)
+    y_score = np.asarray(res.results.y_score)
+
+    test_meta = getattr(res.results, "test_meta", None)
+    groups_test = np.asarray(test_meta[agg_group])
+
+    unique_labels_encoded = np.unique(y_true)
+
+    group_eval = evaluate_group_level(
+        y_true=y_true,
+        y_score=y_score,
+        groups=groups_test,
+        unique_labels_encoded=unique_labels_encoded,
+        agg=agg_method,
+        threshold=threshold,
+        proportion=proportion
+    )
+
+    new_params = make_namespace({
+        **vars(res.params),
+        "mode": "group",
+        "agg_group": agg_group,
+        "group_agg": agg_method,
+        "group_threshold": threshold,
+        "group_proportion": proportion
+    })
+
     return Result(
-        set_params=params_ns,
-        set_volume=vol_ns,
-        set_results=results_ns,
-        set_group_results=group_ns
+        set_params=new_params,
+        set_volume=res.volume,
+        set_results=make_namespace(group_eval),
     )

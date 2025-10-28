@@ -143,64 +143,38 @@ def plot_pca(points, y_attr, label=None, n_components=2):
     fig.tight_layout()
     return fig, ax
 
-def _norm(point, x_attr, y_attr):
-    X = np.asarray(getattr(point, x_attr))
-    Y = np.asarray(getattr(point, y_attr))
-    if Y.ndim == 1:
-        Y = Y[None, :]
-    xs = [X]
-    ys = [Y]
-
-    x_label_raw = point.original_headers.get(x_attr, x_attr)
-    x_unit = point.units.get(x_attr, "")
-    xlabs = [x_label_raw]
-    xunits = [x_unit]
-
-    y_label_raw = point.original_headers.get(y_attr, y_attr)
-    y_unit = point.units.get(y_attr, "")
-    ylabs = [[y_label_raw]]
-    yunits = [[y_unit]]
-
-    return xs, ys, xlabs, xunits, ylabs, yunits
-
 def plot_point(point, x_attr, y_attr, func=None):
     plt.close('all')
-    xs, ys, xlabs, xunits, ylabs, yunits = _norm(point, x_attr, y_attr)
-    n = len(xs)
+    fig, ax = plt.subplots()
 
-    fig, axes = plt.subplots(n, 1, figsize=(6, 3*n))
-    if n == 1:
-        axes = [axes]
+    X = getattr(point, x_attr)
+    Y = getattr(point, y_attr)
 
-    for i, ax in enumerate(axes):
-        X = np.asarray(xs[i])
-        Y = ys[i]
-        if Y.ndim == 1:
-            Y = Y[None, :]
-        rows = [func(row) if func is not None else row for row in Y]
-        for r in rows:
-            ax.plot(X, r)
-        ax.set_yticks([])
+    if func is not None:
+        Y_plot = func(Y)
+    else:
+        Y_plot = Y
 
-        xlab = xlabs[i] if xlabs[i] is not None else ""
-        xunit = xunits[i] if xunits[i] is not None else ""
-        ax.set_xlabel(f"{xlab} ({xunit})" if xunit else xlab)
+    x_unit = point.units.get(x_attr, None) if hasattr(point, "units") else None
+    y_unit = point.units.get(y_attr, None) if hasattr(point, "units") else None
 
-        ylab_list = ylabs[i] if ylabs[i] is not None else []
-        yunit_list = yunits[i] if yunits[i] is not None else []
-        if yunit_list and len(yunit_list) == len(ylab_list):
-            ylab = ", ".join(f"{a}" for a in ylab_list)
-        else:
-            ylab = ", ".join(ylab_list)
-        if ylab:
-            prefix = (func.__name__ + " ") if func is not None else ""
-            ax.set_ylabel(prefix + ylab)
+    if x_unit:
+        xlabel = f"{x_attr} ({x_unit})"
+    else:
+        xlabel = x_attr
 
-        if len(ylab_list) > 1:
-            ax.legend(ylab_list, loc="best", frameon=False)
+    if y_unit:
+        ylabel = f"{y_attr} ({y_unit})"
+    else:
+        ylabel = y_attr
+
+    ax.plot(X, Y_plot, lw=1)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     fig.tight_layout()
-    return fig, axes
+    return fig, ax
 
 def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75)):
     plt.close('all')
@@ -422,7 +396,7 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     fig.tight_layout()
     return fig, ax
 
-def plot_grid(points, xattr, yattr, sizeattr):
+def plot_grid(points, x_attr, y_attr, size_attr):
     plt.close('all')
     fig, ax = plt.subplots()
 
@@ -431,13 +405,13 @@ def plot_grid(points, xattr, yattr, sizeattr):
 
     cells = {}
 
-    grid_size = getattr(groups[0][0], sizeattr)
+    grid_size = getattr(groups[0][0], size_attr)
     x_max = grid_size[0]
     y_max = grid_size[1]
 
     for gi, group in enumerate(groups):
         for p in group:
-            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
+            x = int(getattr(p, x_attr)); y = int(getattr(p, y_attr))
             cells.setdefault((y, x), []).append(gi)
 
     class_names = [f"Group {i+1}" for i in range(len(groups))]
@@ -469,7 +443,7 @@ def plot_grid(points, xattr, yattr, sizeattr):
     ax.set_yticks(np.arange(0, y_max + 1), minor=True)
     ax.grid(True, which='minor'); ax.grid(False, which='major')
     ax.tick_params(which='minor', length=0)
-    ax.set_xlabel(xattr); ax.set_ylabel(yattr)
+    ax.set_xlabel(x_attr); ax.set_ylabel(y_attr)
     ax.tick_params(axis='both', which='major', labelsize=6)
     for xt in ax.get_xticklabels():
         xt.set_rotation(90); xt.set_horizontalalignment('center')

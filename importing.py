@@ -67,7 +67,7 @@ def series_from_file(path, name_from=None):
     parsed = [parse_header(c) for c in df.columns]
     cols = [p[0] for p in parsed]
     units = {p[0]: (p[1] or "") for p in parsed}
-    originals = {p[0]: p[2] for p in parsed}
+    # originals = {p[0]: p[2] for p in parsed}
     df.columns = cols
     params = {}
     for c in cols:
@@ -82,7 +82,7 @@ def series_from_file(path, name_from=None):
                 arr = col.to_numpy()
             params[c] = arr
     params["units"] = units
-    params["original_headers"] = originals
+    # params["original_headers"] = originals
     params["source_file"] = str(path)
     if name_from and name_from in params and not isinstance(params[name_from], np.ndarray):
         params["name"] = str(params[name_from])

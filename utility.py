@@ -1,26 +1,10 @@
 import numpy as np
-import csv
 from signalearn.general_utility import *
 import pickle
 from scipy.fft import *
 from scipy.interpolate import UnivariateSpline
 from types import SimpleNamespace
 import math
-
-def _label_unit(p, attr):
-    units = getattr(p, "units", {}) or {}
-    originals = getattr(p, "original_headers", {}) or {}
-    u = units.get(attr, "") or ""
-    h = originals.get(attr, attr)
-    if u:
-        h = re.sub(rf"\s*[\(\[]\s*{re.escape(u)}\s*[\)\]]\s*$", "", str(h))
-    return h, u
-
-def read_map(map_path):
-    with open(map_path, mode='r', encoding='utf-8') as file:
-        reader = csv.DictReader(file, delimiter='\t')
-        map = [row for row in reader]
-    return map
 
 def filter(points, attr, val):
     if isinstance(val, str):

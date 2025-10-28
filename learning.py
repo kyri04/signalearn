@@ -5,9 +5,6 @@ from signalearn.learning_utility import *
 from sklearn.metrics import confusion_matrix
 import numpy as np
 
-from signalearn.preprocess import func_y
-import copy
-
 def classify(
     points,
     label,
@@ -15,8 +12,6 @@ def classify(
     classifier="rf",
     test_size=0.2,
     split_state=42,
-    agg_method='mean',
-    agg_group=None,
     scale=False
 ):
 
@@ -26,7 +21,6 @@ def classify(
     
     labels = prepare_labels(points, label)
     groups = prepare_groups(points, group)
-    agg_groups = prepare_groups(points, agg_group) if agg_group is not None else None
 
     labels_encoded, encoder = encode(labels)
     unique_labels = encoder.classes_
@@ -60,53 +54,43 @@ def classify(
 
     feature_importances = get_feature_importances(model)
 
-    group_results_ns = None
-    if agg_groups is not None:
-        groups_test = agg_groups[test_idx]
-        group_eval = evaluate_group_level(
-            y_true=y_test,
-            y_score=y_score,
-            groups=groups_test,
-            unique_labels_encoded=unique_labels_encoded,
-            agg=agg_method,
-            threshold=0.5
-        )
-        group_results_ns = make_namespace(group_eval)
-
-    attributes = set(points[0].__dict__) - set(get_attributes(Series))
-    unique_counts = {a: count_unique(points, a) for a in sorted(attributes)}
+    pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
+    unique_cnts = {a: count_unique(points, a) for a in sorted(pt0_attrs)}
+    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
 
     res = Result(
-        set_volume=make_namespace({
+        set_volume={
             "points": N,
             "classes": len(unique_labels),
-            **unique_counts
-        }),
-        set_params=make_namespace({
+            **unique_cnts
+        },
+        set_params={
             "label": label,
             "group": group,
-            "agg_group": agg_group if agg_group is not None else 'none',
             "classifier": classifier,
             "test_size": test_size,
             "split_state": split_state,
             "unique_labels": unique_labels,
-            "group_agg": agg_method
-        }),
-        set_results=make_namespace({
+            "mode": "normal"
+        },
+        set_results={
             "accuracy": accuracy,
             "specificity": mean_specificity,
             "sensitivity": mean_sensitivity,
             "precision": mean_precision,
             "recall": mean_recall,
-            "f1": mean_f1,
+            "f1": mean_f1
+        },
+        meta_ns = {
             "conf_matrix": conf_matrix,
             "y_true": y_test,
             "y_score": y_score,
-            "feature_importances": feature_importances
-        }),
-        set_group_results=group_results_ns
+            "feature_importances": feature_importances,
+            "test_index": test_idx,
+            "test_meta": test_meta,
+            "model": model,
+        }
     )
-
     return res
 
 def shuffle_classify(
