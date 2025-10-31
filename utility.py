@@ -32,6 +32,16 @@ def save(instance, filepath):
     with open(filepath, "wb") as file:
         pickle.dump(instance, file)
 
+def get_axes_labels(point, *attrs):
+    labels = []
+    for attr in attrs:
+        unit = point.units.get(attr, "")
+        lbl = point.labels.get(attr, attr)
+        if unit:
+            lbl = f"{lbl} ({unit})"
+        labels.append(lbl)
+    return labels
+
 def find_same_attribute(points):
 
     common_attrs = vars(points[0]).keys()

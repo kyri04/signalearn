@@ -7,6 +7,7 @@ import numpy as np
 
 def classify(
     points,
+    y_attr,
     label,
     group=None,
     classifier="rf",
@@ -16,8 +17,8 @@ def classify(
 ):
 
     N = len(points)
-
-    ys = np.array([point.y for point in points])
+    
+    ys = np.array([getattr(point, y_attr) for point in points])
     
     labels = prepare_labels(points, label)
     groups = prepare_groups(points, group)
@@ -96,42 +97,39 @@ def classify(
 def shuffle_classify(
     points, 
     label, 
+    y_attr,
     group=None, 
-    agg_group=None,
     classifier='rf', 
     test_size=0.2,
     shuffles=5,
-    agg_method='mean',
     scale=False
 ):
     results = []
     for rs in range(shuffles):
         results.append(classify(
             points=points, 
+            y_attr=y_attr,
             label = label, 
-            group = group, 
-            agg_group = agg_group,
+            group = group,
             classifier = classifier, 
             test_size = test_size,  
             split_state = rs,
-            agg_method = agg_method,
             scale=scale))
         
     return results
 
 def attr_curve(
     points, 
+    y_attr,
     label, 
     by_attribute,
     group=None, 
-    agg_group=None,
     classifier='rf', 
     test_size=0.2,
     split_state=42,
     divisions=5,
     start_val=0,
     shuffles_per_split=None,
-    agg_method='mean',
     scale=False
 ):
 
@@ -157,13 +155,12 @@ def attr_curve(
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_classify(
                 subset=subset,
+                y_attr=y_attr,
                 label=label,
                 group=group,
-                agg_group=agg_group,
                 classifier=classifier,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                agg_method=agg_method,
                 scale=scale
             )
             results.append(combine_results(res_list))
@@ -171,13 +168,12 @@ def attr_curve(
         else:
             res = classify(
                 points=subset,
+                y_attr=y_attr,
                 label=label,
                 group=group,
-                agg_group=agg_group,
                 classifier=classifier,
                 test_size=test_size,
                 split_state=split_state,
-                agg_method=agg_method,
                 scale=scale
             )
             results.append(res)
@@ -187,15 +183,14 @@ def attr_curve(
 def data_curve(
     points, 
     label, 
+    y_attr,
     group=None, 
-    agg_group=None,
     classifier='rf', 
     test_size=0.2,
     split_state=42, 
     divisions=5,
     start_fraction=0.05,
     shuffles_per_split=None,
-    agg_method='mean',
     scale=False
 ):
 
@@ -208,13 +203,12 @@ def data_curve(
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_classify(
                 points=subset,
+                y_attr=y_attr,
                 label=label,
                 group=group,
-                agg_group=agg_group,
                 classifier=classifier,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                agg_method=agg_method,
                 scale=scale
             )
             res = combine_results(res_list)
@@ -223,13 +217,12 @@ def data_curve(
         else:
             res = classify(
                 points=subset,
+                y_attr=y_attr,
                 label=label,
                 group=group,
-                agg_group=agg_group,
                 classifier=classifier,
                 test_size=test_size,
                 split_state=split_state,
-                agg_method=agg_method,
                 scale=scale
             )
             results.append(res)

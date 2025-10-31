@@ -18,11 +18,11 @@ def sample(points, f=0.05):
     
     return sampled_points
 
-def trim(points, percent=0.05, front=True, back=True, threshold=1e-8):
+def trim(points, x_attr, y_attr, percent=0.05, front=True, back=True, threshold=1e-8):
 
     starts, ends = [], []
     for point in points:
-        y = np.array(point.y)
+        y = getattr(point, y_attr)
         nonzero = np.where(y > threshold)[0]
         if nonzero.size > 0:
             starts.append(nonzero[0])
@@ -46,17 +46,17 @@ def trim(points, percent=0.05, front=True, back=True, threshold=1e-8):
     trimmed = []
     for point in points:
         new_params = point.__dict__.copy()
-        new_params["x"] = np.array(point.x)[sl]
-        new_params["y"] = np.array(point.y)[sl]
+        new_params["x"] = getattr(point, x_attr)[sl]
+        new_params["y"] = getattr(point, y_attr)[sl]
         trimmed.append(point.__class__(new_params))
 
     return trimmed
 
-def trim(points, num=3, front=True, back=True, threshold=1e-8):
+def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
 
     starts, ends = [], []
     for point in points:
-        y = np.array(point.y)
+        y = getattr(point, y_attr)
         nonzero = np.where(y > threshold)[0]
         if nonzero.size > 0:
             starts.append(nonzero[0])
@@ -79,18 +79,18 @@ def trim(points, num=3, front=True, back=True, threshold=1e-8):
     trimmed = []
     for point in points:
         new_params = point.__dict__.copy()
-        new_params["x"] = np.array(point.x)[sl]
-        new_params["y"] = np.array(point.y)[sl]
+        new_params["x"] = getattr(point, x_attr)[sl]
+        new_params["y"] = getattr(point, y_attr)[sl]
         trimmed.append(point.__class__(new_params))
 
     return trimmed
 
-def interpolate(points, n=50):
+def interpolate(points, x_attr, y_attr, n=50):
 
     interpolated_points = []
     for point in points:
-        x = np.array(point.x, dtype=float)
-        y = np.array(point.y, dtype=float)
+        x = getattr(point, x_attr)
+        y = getattr(point, y_attr)
 
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
@@ -166,15 +166,18 @@ def gaussian_mix(points, tau=0.9):
 
     return kept, dropped
 
-def fourier(points):
+def fourier(points, x_attr, y_attr):
     for point in points:
-        N = len(point.y)
+        xs = getattr(point, x_attr)
+        ys = getattr(point, y_attr)
 
-        frequencies = rfftfreq(N, d=(point.x[1] - point.x[0]))
-        amplitudes = rfft(point.y) * 2.0 / N 
+        N = len(ys)
 
-        point.x = frequencies
-        point.y = amplitudes
+        frequencies = rfftfreq(N, d=(xs[1] - xs[0]))
+        amplitudes = rfft(ys) * 2.0 / N 
+
+        setattr(point, x_attr, frequencies)
+        setattr(point, y_attr, amplitudes)
 
     return points
 
@@ -185,9 +188,9 @@ def func_y(points, func=np.mean):
 
     return y
 
-def func_points(points, func=np.log):
+def func_points(points, y_attr, func=np.log):
 
     for point in points:
-        point.y = func(point.y)
+        setattr(point, y_attr, func(getattr(point, y_attr)))
 
     return points

@@ -15,6 +15,7 @@ def save_plot(plot, filename, dpi=300, extension='pdf'):
 def plot_importances(result, points=None, func=None, x_attr=None, y_attr=None):
     plt.close('all')
     fig, ax = plt.subplots()
+    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
     if isinstance(result, list):
         importances = []
         first = None
@@ -28,17 +29,11 @@ def plot_importances(result, points=None, func=None, x_attr=None, y_attr=None):
         imp = np.mean(importances, axis=0)
 
         x_imp = np.asarray(getattr(first.params.mean_point, x_attr), dtype=float)
-        x_label_raw = first.params.mean_point.original_headers.get(x_attr, x_attr)
-        x_unit = first.params.mean_point.units.get(x_attr, "")
-        xlabel = f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw
     else:
         fi = getattr(result.results, "feature_importances", None)
         imp = np.asarray(fi, dtype=float)
 
         x_imp = np.asarray(getattr(points[0], x_attr), dtype=float)
-        x_label_raw = points[0].original_headers.get(x_attr, x_attr)
-        x_unit = points[0].units.get(x_attr, "")
-        xlabel = f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw
 
     ax.plot(x_imp, imp, label="Feature importances")
 
@@ -59,8 +54,7 @@ def plot_importances(result, points=None, func=None, x_attr=None, y_attr=None):
         else:
             med_scaled = np.full_like(med, imp_min)
 
-        y_label_raw = points[0].original_headers.get(y_attr, y_attr)
-        lbl = f"Median {y_label_raw}" if func is None else f"Median {func.__name__}({y_label_raw})"
+        lbl = f"Median {ylabel}" if func is None else f"Median {func.__name__}({ylabel})"
         ax.plot(x_imp, med_scaled, linestyle=":", color="0", label=lbl)
 
     ax.set_yticks([])
@@ -155,18 +149,7 @@ def plot_point(point, x_attr, y_attr, func=None):
     else:
         Y_plot = Y
 
-    x_unit = point.units.get(x_attr, None) if hasattr(point, "units") else None
-    y_unit = point.units.get(y_attr, None) if hasattr(point, "units") else None
-
-    if x_unit:
-        xlabel = f"{x_attr} ({x_unit})"
-    else:
-        xlabel = x_attr
-
-    if y_unit:
-        ylabel = f"{y_attr} ({y_unit})"
-    else:
-        ylabel = y_attr
+    xlabel, ylabel = get_axes_labels(point, x_attr, y_attr)
 
     ax.plot(X, Y_plot, lw=1)
 
@@ -183,6 +166,8 @@ def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75)):
     X = np.asarray(getattr(points[0], x_attr))
     Y = np.vstack([(getattr(p, y_attr) if func is None else func(getattr(p, y_attr))) for p in points])
 
+    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
+
     Y[~np.isfinite(Y)] = np.nan
     q1, med, q3 = np.nanquantile(Y, q, axis=0)
 
@@ -191,13 +176,10 @@ def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75)):
     ax.plot(X[m], med[m], lw=1.5, label='Median')
 
     ax.set_yticks([])
-    x_label_raw = points[0].original_headers.get(x_attr, x_attr)
-    x_unit = points[0].units.get(x_attr, "")
-    ax.set_xlabel(f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw)
+    ax.set_xlabel(xlabel)
 
-    y_label_raw = points[0].original_headers.get(y_attr, y_attr)
-    ylab = y_label_raw if func is None else f'{func.__name__} {y_label_raw}'
-    ax.set_ylabel(ylab)
+    ylabel = ylabel if func is None else f'{func.__name__} {ylabel}'
+    ax.set_ylabel(ylabel)
 
     ax.legend()
     fig.tight_layout()
@@ -210,12 +192,10 @@ def plot_scaled(points, x_attr, y_attr, idx=0):
     fig, ax = plt.subplots()
     ax.set_yticklabels([])
 
-    x_label_raw = points[idx].original_headers.get(x_attr, x_attr)
-    x_unit = points[idx].units.get(x_attr, "")
-    ax.set_xlabel(f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw)
+    xlabel, ylabel = get_axes_labels(points[idx], x_attr, y_attr)
 
-    y_label_raw = points[idx].original_headers.get(y_attr, y_attr)
-    ax.set_ylabel(f"Standardised {y_label_raw}")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(f"Scaled {ylabel}")
 
     ax.plot(getattr(points[idx], x_attr), ys_scaled[0])
 
@@ -234,13 +214,12 @@ def plot_points(points, x_attr, y_attr, func=None, offset=0.1):
 
     ax.set_yticks([])
 
-    y_label_raw = points[0].original_headers.get(y_attr, y_attr)
-    ylab = y_label_raw if func is None else f"{func.__name__} {y_label_raw}"
-    ax.set_ylabel(ylab)
+    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
 
-    x_label_raw = points[0].original_headers.get(x_attr, x_attr)
-    x_unit = points[0].units.get(x_attr, "")
-    ax.set_xlabel(f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw)
+    ylabel = ylabel if func is None else f"{func.__name__} {ylabel}"
+    ax.set_ylabel(ylabel)
+
+    ax.set_xlabel(xlabel)
 
     ax.margins(x=0)
 
@@ -255,12 +234,10 @@ def plot_func(points, x_attr, y_attr, func=np.mean):
 
     fig, ax = plt.subplots()
 
-    x_label_raw = points[0].original_headers.get(x_attr, x_attr)
-    x_unit = points[0].units.get(x_attr, "")
-    ax.set_xlabel(f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw)
+    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
 
-    y_label_raw = points[0].original_headers.get(y_attr, y_attr)
-    ax.set_ylabel(y_label_raw)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     ax.plot(getattr(points[0], x_attr), y)
 
@@ -277,12 +254,9 @@ def plot_func_difference(points_a, points_b, x_attr, y_attr, func=np.mean):
     y_b = func(Y_b, axis=0)
     y = y_a - y_b
 
-    x_label_raw = points_a[0].original_headers.get(x_attr, x_attr)
-    x_unit = points_a[0].units.get(x_attr, "")
-    ax.set_xlabel(f"{x_label_raw} ({x_unit})" if x_unit else x_label_raw)
-
-    y_label_raw = points_a[0].original_headers.get(y_attr, y_attr)
-    ax.set_ylabel(y_label_raw)
+    xlabel, ylabel = get_axes_labels(points_a[0], x_attr, y_attr)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     ax.plot(getattr(points_a[0], x_attr), y)
 
@@ -319,9 +293,10 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
         ax.hist(gv, bins=bins, histtype="step", linewidth=1.8, label=f"Group {i}")
 
     first_point = groups[0][0] if groups and groups[0] else None
-    y_label_raw = first_point.original_headers.get(y_attr, "Intensity") if first_point else "Intensity"
     func_name = func.__name__ if callable(func) else ""
-    x_label_core = f"{yfunc.__name__} {y_label_raw}".strip()
+
+    ylabel = get_axes_labels(points[0], y_attr)
+    x_label_core = f"{yfunc.__name__} {ylabel}".strip()
 
     ax.set_xlabel(f"{func_name}({x_label_core})" if func_name else x_label_core)
     ax.set_ylabel("Frequency")
