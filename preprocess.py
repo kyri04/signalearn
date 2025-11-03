@@ -98,15 +98,80 @@ def interpolate(points, x_attr, y_attr, n=50):
             continue
 
         f = interp1d(x, y, kind='linear', fill_value="extrapolate")
-        x_uniform = np.linspace(x[0], y[-1], n)
+        x_uniform = np.linspace(x[0], x[-1], n)
         y_uniform = f(x_uniform)
 
         params = point.__dict__.copy()
-        params["x"] = x_uniform
-        params["y"] = y_uniform
+        params[x_attr] = x_uniform
+        params[y_attr] = y_uniform
         interpolated_points.append(point.__class__(params))
 
     return interpolated_points
+
+def resample(points, x_attr, rate):
+    out = []
+    dt = 1.0 / float(rate)
+
+    for p in points:
+        t_raw = np.asarray(getattr(p, x_attr), float)
+        if t_raw.ndim != 1 or t_raw.size < 2:
+            continue
+
+        N = t_raw.shape[0]
+        chan_names = []
+        for k, v in p.__dict__.items():
+            if k == x_attr:
+                continue
+            if is_numeric_array(v) and np.asarray(v).shape[0] == N:
+                chan_names.append(k)
+        if not chan_names:
+            continue
+
+        t_mask = np.isfinite(t_raw)
+        t = t_raw[t_mask]
+        if t.size < 2:
+            continue
+        sidx = np.argsort(t)
+        t = t[sidx]
+        idx_chain = np.nonzero(t_mask)[0][sidx]
+        t_unique, keep = np.unique(t, return_index=True)
+        if t_unique.size < 2:
+            continue
+
+        t_uniform = np.arange(t_unique[0], t_unique[-1], dt)
+        if t_uniform.size < 2:
+            t_uniform = np.linspace(t_unique[0], t_unique[-1], 2)
+
+        resampled = {}
+        for name in chan_names:
+            v_raw = np.asarray(getattr(p, name))
+            v = v_raw[idx_chain]
+            v = v[keep]
+
+            if v.ndim == 1:
+                v = v.astype(float, copy=False)
+                v_mask = np.isfinite(v)
+                if np.count_nonzero(v_mask) < 2:
+                    resampled[name] = getattr(p, name)
+                    continue
+                f = interp1d(t_unique[v_mask], v[v_mask], bounds_error=False, fill_value="extrapolate", assume_sorted=True)
+                resampled[name] = f(t_uniform)
+            else:
+                v = v.astype(float, copy=False)
+                row_finite = np.all(np.isfinite(v), axis=tuple(range(1, v.ndim)))
+                if np.count_nonzero(row_finite) < 2:
+                    resampled[name] = getattr(p, name)
+                    continue
+                f = interp1d(t_unique[row_finite], v[row_finite, ...], axis=0, bounds_error=False, fill_value="extrapolate", assume_sorted=True)
+                resampled[name] = f(t_uniform)
+
+        params = p.__dict__.copy()
+        params[x_attr] = t_uniform
+        for name, arr in resampled.items():
+            params[name] = arr
+        out.append(p.__class__(**params))
+
+    return out
 
 def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
     if not points:

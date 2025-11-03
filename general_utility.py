@@ -77,6 +77,13 @@ def num(x):
 def is_number(x):
         return isinstance(x, (int, float, np.integer, np.floating))
 
+def is_numeric_array(a):
+    try:
+        arr = np.asarray(a)
+    except Exception:
+        return False
+    return arr.ndim >= 1 and np.issubdtype(arr.dtype, np.number)
+
 def format_confusion_matrix(conf_matrix, labels):
         col_width = max(5, max(len(str(label)) for label in labels))
         row_header_width = max(len("Actual " + str(label)) for label in labels)
