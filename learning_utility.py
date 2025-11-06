@@ -10,6 +10,12 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import StandardScaler
 
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+
 from collections import Counter
 import numpy as np
 
@@ -87,6 +93,17 @@ def get_classifier(method):
         "gb": GradientBoostingClassifier(random_state=42),
     }
     return classifiers[method]
+
+def get_regressor(method):
+    regressors = {
+        "dt": DecisionTreeRegressor(random_state=42),
+        "rf": RandomForestRegressor(random_state=42, n_estimators=300, max_depth=10),
+        "svm": SVR(),
+        "lr": LinearRegression(),
+        "knn": KNeighborsRegressor(),
+        "gb": GradientBoostingRegressor(random_state=42),
+    }
+    return regressors[method]
 
 def calculate_metrics(conf_matrix, average="binary", pos_index=1):
     C = conf_matrix.shape[0]
@@ -344,111 +361,92 @@ def combine_volume(results_list):
 def combine_results(results):
     first = results[0]
 
-    metrics = ["accuracy", "precision", "recall",
-               "specificity", "sensitivity", "f1"]
+    cls_metrics = {"accuracy","precision","recall","specificity","sensitivity","f1"}
+    reg_metrics = {"mae","mse","rmse","r2"}
+    all_metrics = cls_metrics | reg_metrics
 
-    agg_metrics = {}
-    for m in metrics:
-        vals = [
-            getattr(r.results, m, None)
-            for r in results
-            if getattr(r.results, m, None) is not None
-        ]
-        arr = np.array(vals, dtype=float)
-        if arr.size == 0:
-            return None
-        agg_metrics[m] = float(np.nanmean(arr))
+    def mean_or_none(vals):
+        vals = [v for v in vals if v is not None and np.isfinite(v)]
+        return float(np.nanmean(vals)) if vals else None
 
-    conf_mats = [
-        r.meta.conf_matrix
-        for r in results
-        if getattr(r.meta, "conf_matrix", None) is not None
-    ]
-    if conf_mats:
-        combined_conf_mat = np.sum(conf_mats, axis=0)
-    else:
-        combined_conf_mat = None
+    agg = {}
+    for m in all_metrics:
+        agg[m] = mean_or_none([getattr(r.results, m, None) for r in results])
+    agg = {k:v for k,v in agg.items() if v is not None}
 
-    y_trues = [
-        np.asarray(r.meta.y_true)
-        for r in results
-        if getattr(r.meta, "y_true", None) is not None
-    ]
-    y_scores = [
-        np.asarray(r.meta.y_score)
-        for r in results
-        if getattr(r.meta, "y_score", None) is not None
-    ]
-    test_indices = [
-        np.asarray(r.meta.test_index)
-        for r in results
-        if getattr(r.meta, "test_index", None) is not None
-    ]
+    conf_mats = [getattr(r.meta, "conf_matrix", None) for r in results]
+    conf_mats = [cm for cm in conf_mats if cm is not None]
+    combined_conf_mat = np.sum(conf_mats, axis=0) if conf_mats else None
+
+    y_trues   = [np.asarray(getattr(r.meta,"y_true"))   for r in results if getattr(r.meta,"y_true",None)   is not None]
+    y_scores  = [np.asarray(getattr(r.meta,"y_score"))  for r in results if getattr(r.meta,"y_score",None)  is not None]
+    y_preds   = [np.asarray(getattr(r.meta,"y_pred"))   for r in results if getattr(r.meta,"y_pred",None)   is not None]
+    residuals = [np.asarray(getattr(r.meta,"residuals"))for r in results if getattr(r.meta,"residuals",None)is not None]
+    test_idx  = [np.asarray(getattr(r.meta,"test_index")) for r in results if getattr(r.meta,"test_index",None) is not None]
+
+    if y_trues and y_preds:
+        yt = np.concatenate(y_trues, axis=0)
+        yp = np.concatenate(y_preds,  axis=0)
+        mae  = float(np.mean(np.abs(yt - yp)))
+        mse  = float(np.mean((yt - yp)**2))
+        rmse = float(np.sqrt(mse))
+        ss_tot = float(np.sum((yt - yt.mean())**2))
+        r2   = float(1.0 - np.sum((yt - yp)**2)/ss_tot) if ss_tot > 0 else float("nan")
+        agg.update({"mae": mae, "mse": mse, "rmse": rmse, "r2": r2})
 
     merged_test_meta = {}
-    if getattr(first.meta, "test_meta", None) is not None:
-        for key in first.meta.test_meta.keys():
-            merged_test_meta[key] = np.concatenate(
-                [
-                    np.asarray(r.meta.test_meta[key])
-                    for r in results
-                    if getattr(r.meta, "test_meta", None) is not None
-                       and key in r.meta.test_meta
-                ],
-                axis=0
-            )
+    keys = set()
+    for r in results:
+        tm = getattr(r.meta, "test_meta", None)
+        if isinstance(tm, dict): keys.update(tm.keys())
+    for k in keys:
+        merged_test_meta[k] = np.concatenate(
+            [np.asarray(r.meta.test_meta[k]) for r in results
+             if getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta],
+            axis=0
+        ) if any(getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta for r in results) else None
 
-    feat_imps = [
-        np.asarray(r.meta.feature_importances)
-        for r in results
-        if getattr(r.meta, "feature_importances", None) is not None
-    ]
-    if feat_imps:
-        shapes = {fi.shape for fi in feat_imps}
-        if len(shapes) == 1:
-            combined_feat_imp = np.mean(feat_imps, axis=0)
-        else:
-            combined_feat_imp = None
+    feat_imps = [np.asarray(getattr(r.meta,"feature_importances")) for r in results
+                 if getattr(r.meta,"feature_importances",None) is not None]
+    if feat_imps and len({fi.shape for fi in feat_imps}) == 1:
+        combined_feat_imp = np.mean(feat_imps, axis=0)
     else:
         combined_feat_imp = None
 
-    combined_meta_ns = make_namespace({
-        "conf_matrix": combined_conf_mat,
-        "y_true": np.concatenate(y_trues, axis=0) if y_trues else None,
-        "y_score": np.concatenate(y_scores, axis=0) if y_scores else None,
-        "feature_importances": combined_feat_imp,
-        "test_index": np.concatenate(test_indices, axis=0) if test_indices else None,
-        "test_meta": merged_test_meta if merged_test_meta else None,
-        "model": results[0].params.model,
-    })
+    vol0 = vars(first.volume)
+    combined_volume = {}
+    for k in vol0.keys():
+        vals = [getattr(r.volume, k, None) for r in results]
+        if all(isinstance(v, (int,float,np.number)) for v in vals if v is not None):
+            combined_volume[k] = float(np.nansum([float(v) for v in vals if v is not None]))
+        else:
+            combined_volume[k] = vol0[k]
 
-    combined_params_ns = make_namespace({
+    combined_params = {
         **vars(first.params),
-        "mode": f"{getattr(first.params, 'mode', 'sample')}_combined",
+        "mode": f"{getattr(first.params, 'mode', 'combined')}_combined",
         "num_results": len(results),
-    })
+    }
 
-    combined_volume_ns = make_namespace({
-        **vars(first.volume)
-    })
+    combined_meta = {
+        "conf_matrix": combined_conf_mat,
+        "y_true":   np.concatenate(y_trues,  axis=0) if y_trues  else None,
+        "y_score":  np.concatenate(y_scores, axis=0) if y_scores else None,
+        "y_pred":   np.concatenate(y_preds,  axis=0) if y_preds  else None,
+        "residuals":np.concatenate(residuals,axis=0) if residuals else None,
+        "feature_importances": combined_feat_imp,
+        "test_index": np.concatenate(test_idx, axis=0) if test_idx else None,
+        "test_meta": merged_test_meta or None,
+        "model": None,
+    }
 
-    combined_results_ns = make_namespace({
-        "accuracy":     agg_metrics["accuracy"],
-        "precision":    agg_metrics["precision"],
-        "recall":       agg_metrics["recall"],
-        "specificity":  agg_metrics["specificity"],
-        "sensitivity":  agg_metrics["sensitivity"],
-        "f1":           agg_metrics["f1"],
-    })
-
-    combined_res = Result(
-        set_params = combined_params_ns,
-        set_volume = combined_volume_ns,
-        set_results = combined_results_ns,
-        set_meta = combined_meta_ns
+    combined = Result(
+        set_params = combined_params,
+        set_volume = combined_volume,
+        set_results = agg,
+        set_meta = combined_meta
     )
-
-    return combined_res
+    return combined
 
 def aggregate_result(
     res,

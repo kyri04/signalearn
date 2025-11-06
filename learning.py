@@ -94,6 +94,86 @@ def classify(
     )
     return res
 
+def regress(
+    points,
+    y_attr,
+    target,
+    group=None,
+    regressor="rf",
+    test_size=0.2,
+    split_state=42,
+    scale=False
+):
+    N = len(points)
+
+    ys = np.array([getattr(point, y_attr) for point in points])
+    y = np.array([getattr(point, target) for point in points], dtype=float)
+    groups = prepare_groups(points, group)
+
+    train_idx, test_idx = get_single_split(N, None, groups, test_size, split_state)
+
+    if groups is not None:
+        train_groups = set(groups[train_idx])
+        test_groups = set(groups[test_idx])
+        assert train_groups.isdisjoint(test_groups)
+
+    X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+
+    if scale:
+        X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    else:
+        X_train, X_test = X_train_raw, X_test_raw
+
+    model = get_regressor(regressor)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    mse = np.mean((y_test - y_pred) ** 2)
+    rmse = float(np.sqrt(mse))
+    mae = float(np.mean(np.abs(y_test - y_pred)))
+    ss_res = np.sum((y_test - y_pred) ** 2)
+    ss_tot = np.sum((y_test - np.mean(y_test)) ** 2)
+    r2 = float(1.0 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
+
+    feature_importances = get_feature_importances(model)
+
+    pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
+    unique_cnts = {a: count_unique(points, a) for a in sorted(pt0_attrs)}
+    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+
+    res = Result(
+        set_volume={
+            "points": N,
+            **unique_cnts
+        },
+        set_params={
+            "target": target,
+            "group": group,
+            "regressor": regressor,
+            "test_size": test_size,
+            "split_state": split_state,
+            "mode": "normal"
+        },
+        set_results={
+            "mae": mae,
+            "mse": mse,
+            "rmse": rmse,
+            "r2": r2
+        },
+        meta_ns={
+            "y_true": y_test,
+            "y_pred": y_pred,
+            "residuals": y_test - y_pred,
+            "feature_importances": feature_importances,
+            "test_index": test_idx,
+            "test_meta": test_meta,
+            "model": model,
+        }
+    )
+    return res
+
 def shuffle_classify(
     points, 
     label, 

@@ -4,6 +4,7 @@ import pickle
 from scipy.fft import *
 from scipy.interpolate import UnivariateSpline
 from types import SimpleNamespace
+from collections import defaultdict
 import math
 
 def filter(points, attr, val):
@@ -93,6 +94,68 @@ def combine_vals(points, attr, vals, new_val):
         if any(v.lower() in getattr(point, attr).lower() for v in vals): setattr(point, attr, new_val)
         
     return points
+
+def combine(points, match_id):
+    groups = defaultdict(list)
+    for p in points:
+        if hasattr(p, match_id):
+            k = getattr(p, match_id)
+            if k is not None:
+                groups[str(k)].append(p)
+
+    out = []
+    for k, grp in groups.items():
+        if len(grp) < 2:
+            continue
+
+        params = {match_id: k}
+        names = [getattr(p, "name", None) for p in grp if getattr(p, "name", None)]
+        params["name"] = "+".join(sorted(set(names))) if names else str(k)
+
+        meta = {"units", "labels", "name", match_id}
+        attrs = set()
+        for p in grp:
+            attrs.update(a for a in getattr(p, "__dict__", {}) if a not in meta)
+
+        units_acc, labels_acc = {}, {}
+
+        for a in sorted(attrs):
+            vals = [getattr(p, a) for p in grp if hasattr(p, a)]
+
+            arrays, scalars = [], []
+            for v in vals:
+                if isinstance(v, (str, bytes)) or np.isscalar(v):
+                    scalars.append(v)
+                else:
+                    arrays.append(np.asarray(v).ravel())
+
+            if arrays:
+                params[a] = np.concatenate(arrays, axis=0)
+            else:
+                if scalars and all(s == scalars[0] for s in scalars):
+                    params[a] = scalars[0]
+                else:
+                    seen = set()
+                    uniq = []
+                    for s in scalars:
+                        if s not in seen:
+                            seen.add(s)
+                            uniq.append(s)
+                    params[a] = uniq
+
+            for p in grp:
+                u = getattr(p, "units", None)
+                if isinstance(u, dict) and a in u and a not in units_acc:
+                    units_acc[a] = u[a]
+                l = getattr(p, "labels", None)
+                if isinstance(l, dict) and a in l and a not in labels_acc:
+                    labels_acc[a] = l[a]
+
+        params["units"] = units_acc
+        params["labels"] = labels_acc
+        out.append(grp[0].__class__(params))
+
+    return out
 
 def find_unique(points, attr):
 

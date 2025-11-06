@@ -117,7 +117,7 @@ def load_data(directory,
             out.append(series)
     return out
 
-def add_header(directory, header_cols):
+def add_header(directory, header_cols, replace=False):
     exts = ("*.dat", "*.txt", "*.csv")
     delimiters = [",", "\t", ";", " "]
 
@@ -135,7 +135,11 @@ def add_header(directory, header_cols):
             header = delim.join(header_cols) + "\n"
 
             with open(file, "w") as f:
-                f.write(header + "".join(lines))
+                if replace and lines:
+                    lines[0] = header
+                    f.writelines(lines)
+                else:
+                    f.write(header + "".join(lines))
 
 def extract_attrs_from_filename(path, spec):
     p = Path(path)

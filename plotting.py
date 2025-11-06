@@ -432,3 +432,65 @@ def plot_grid(points, x_attr, y_attr, size_attr):
 
     fig.tight_layout()
     return fig, ax
+
+def plot_parity(result):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    y_true = getattr(result.meta, 'y_true', None)
+    y_pred = getattr(result.meta, 'y_pred', None)
+
+    if y_true is None or y_pred is None:
+        ax.text(0.5, 0.5, "y_true or y_pred not found in result.meta",
+                ha='center', va='center', transform=ax.transAxes)
+        fig.tight_layout()
+        return fig, ax
+
+    yt = np.asarray(y_true, dtype=float).ravel()
+    yp = np.asarray(y_pred, dtype=float).ravel()
+    m = np.isfinite(yt) & np.isfinite(yp)
+    yt, yp = yt[m], yp[m]
+
+    if yt.size == 0:
+        ax.text(0.5, 0.5, "No finite data to plot",
+                ha='center', va='center', transform=ax.transAxes)
+        fig.tight_layout()
+        return fig, ax
+
+    ax.scatter(yt, yp, s=12, alpha=0.7, edgecolors='k')
+
+    vmin = float(min(yt.min(), yp.min()))
+    vmax = float(max(yt.max(), yp.max()))
+    ax.plot([vmin, vmax], [vmin, vmax], linestyle=":", linewidth=1.2, color="black")
+
+    target = getattr(result.params, 'target', None)
+    xlab = f"Actual {target}" if target is not None else "Actual"
+    ylab = f"Predicted {target}" if target is not None else "Predicted"
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+
+    r2 = getattr(result.results, 'r2', None)
+    mae = getattr(result.results, 'mae', None)
+    rmse = getattr(result.results, 'rmse', None)
+    info = []
+    if r2 is not None:   info.append(f"R²={float(r2):.3f}")
+    if mae is not None:  info.append(f"MAE={float(mae):.3f}")
+    if rmse is not None: info.append(f"RMSE={float(rmse):.3f}")
+    if info:
+        ax.text(0.98, 0.02, "  ".join(info), transform=ax.transAxes,
+                ha='right', va='bottom')
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_pred_by_true(result):
+    plt.close('all')
+    fig, ax = plt.subplots()
+    y_true = np.asarray(result.meta.y_true, float)
+    y_pred = np.asarray(result.meta.y_pred, float)
+    data = [y_pred[y_true == g] for g in np.unique(y_true)]
+    ax.boxplot(data, positions=np.unique(y_true), widths=0.5)
+    ax.set_xlabel("True Grade")
+    ax.set_ylabel("Predicted Value")
+    fig.tight_layout()
+    return fig, ax
