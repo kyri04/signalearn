@@ -40,7 +40,7 @@ def classify(
     if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
     else: X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_algorithm(algorithm)
+    model = get_classifier(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -125,7 +125,7 @@ def regress(
     else:
         X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_algorithm(algorithm)
+    model = get_regressor(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
