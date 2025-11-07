@@ -169,7 +169,26 @@ def find_unique(points, attr):
     return list(unique_vals)
 
 def count_unique(points, attr):
-    return len(find_unique(points, attr))
+    vals = set()
+    for p in points:
+        v = getattr(p, attr, None)
+
+        if isinstance(v, np.ndarray):
+            if v.shape == ():
+                v = v.item()
+            else:
+                continue
+
+        if isinstance(v, (list, tuple, dict)):
+            continue
+
+        if v is None:
+            continue
+        if isinstance(v, float) and np.isnan(v):
+            continue
+
+        vals.add(v)
+    return len(vals)
 
 def fit_spline(x, y, smooth=None):
 

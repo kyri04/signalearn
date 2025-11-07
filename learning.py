@@ -10,7 +10,7 @@ def classify(
     y_attr,
     label,
     group=None,
-    classifier="rf",
+    algorithm="rf",
     test_size=0.2,
     split_state=42,
     scale=False
@@ -40,7 +40,7 @@ def classify(
     if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
     else: X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_classifier(classifier)
+    model = get_algorithm(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -68,7 +68,7 @@ def classify(
         set_params={
             "label": label,
             "group": group,
-            "classifier": classifier,
+            "algorithm": algorithm,
             "test_size": test_size,
             "split_state": split_state,
             "unique_labels": unique_labels,
@@ -82,7 +82,7 @@ def classify(
             "recall": mean_recall,
             "f1": mean_f1
         },
-        meta_ns = {
+        set_meta = {
             "conf_matrix": conf_matrix,
             "y_true": y_test,
             "y_score": y_score,
@@ -99,7 +99,7 @@ def regress(
     y_attr,
     target,
     group=None,
-    regressor="rf",
+    algorithm="rf",
     test_size=0.2,
     split_state=42,
     scale=False
@@ -125,7 +125,7 @@ def regress(
     else:
         X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_regressor(regressor)
+    model = get_algorithm(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -151,7 +151,7 @@ def regress(
         set_params={
             "target": target,
             "group": group,
-            "regressor": regressor,
+            "algorithm": algorithm,
             "test_size": test_size,
             "split_state": split_state,
             "mode": "normal"
@@ -162,7 +162,7 @@ def regress(
             "rmse": rmse,
             "r2": r2
         },
-        meta_ns={
+        set_meta={
             "y_true": y_test,
             "y_pred": y_pred,
             "residuals": y_test - y_pred,
@@ -174,24 +174,25 @@ def regress(
     )
     return res
 
-def shuffle_classify(
+def shuffle_learn(
     points, 
     label, 
     y_attr,
+    learn_func,
     group=None, 
-    classifier='rf', 
+    algorithm='rf', 
     test_size=0.2,
     shuffles=5,
     scale=False
 ):
     results = []
     for rs in range(shuffles):
-        results.append(classify(
+        results.append(learn_func(
             points=points, 
             y_attr=y_attr,
             label = label, 
             group = group,
-            classifier = classifier, 
+            algorithm = algorithm, 
             test_size = test_size,  
             split_state = rs,
             scale=scale))
@@ -203,8 +204,9 @@ def attr_curve(
     y_attr,
     label, 
     by_attribute,
+    learn_func,
     group=None, 
-    classifier='rf', 
+    algorithm='rf', 
     test_size=0.2,
     split_state=42,
     divisions=5,
@@ -233,12 +235,13 @@ def attr_curve(
         subset = [p for p in points if getattr(p, by_attribute) in chosen]
 
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
-            res_list = shuffle_classify(
+            res_list = shuffle_learn(
                 subset=subset,
                 y_attr=y_attr,
                 label=label,
+                learn_func=learn_func,
                 group=group,
-                classifier=classifier,
+                algorithm=algorithm,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scale=scale
@@ -246,12 +249,12 @@ def attr_curve(
             results.append(combine_results(res_list))
             
         else:
-            res = classify(
+            res = learn_func(
                 points=subset,
                 y_attr=y_attr,
                 label=label,
                 group=group,
-                classifier=classifier,
+                algorithm=algorithm,
                 test_size=test_size,
                 split_state=split_state,
                 scale=scale
@@ -264,8 +267,9 @@ def data_curve(
     points, 
     label, 
     y_attr,
+    learn_func,
     group=None, 
-    classifier='rf', 
+    algorithm='rf', 
     test_size=0.2,
     split_state=42, 
     divisions=5,
@@ -281,12 +285,13 @@ def data_curve(
 
         subset = sample(points, frac)
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
-            res_list = shuffle_classify(
+            res_list = shuffle_learn(
                 points=subset,
                 y_attr=y_attr,
                 label=label,
+                learn_func=learn_func,
                 group=group,
-                classifier=classifier,
+                algorithm=algorithm,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scale=scale
@@ -295,12 +300,12 @@ def data_curve(
             results.append(res)
             
         else:
-            res = classify(
+            res = learn_func(
                 points=subset,
                 y_attr=y_attr,
                 label=label,
                 group=group,
-                classifier=classifier,
+                algorithm=algorithm,
                 test_size=test_size,
                 split_state=split_state,
                 scale=scale
