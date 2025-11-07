@@ -218,14 +218,14 @@ def get_param_grid(classify_method):
     }
     return searchers[classify_method]
 
-def _unique_groups_index(groups):
+def unique_groups_index(groups):
     groups = np.asarray(groups)
     uniq, inv = np.unique(groups, return_inverse=True)
     return uniq, inv
 
-def _derive_group_truth(y_true, groups, strategy='strict'):
+def derive_group_truth(y_true, groups, strategy='strict'):
     y_true = np.asarray(y_true)
-    uniq, inv = _unique_groups_index(groups)
+    uniq, inv = unique_groups_index(groups)
     y_group = np.empty(len(uniq), dtype=y_true.dtype)
     for g_idx in range(len(uniq)):
         vals = y_true[inv == g_idx]
@@ -235,9 +235,9 @@ def _derive_group_truth(y_true, groups, strategy='strict'):
             y_group[g_idx] = Counter(vals).most_common(1)[0][0]
     return uniq, y_group
 
-def _aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
+def aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
     groups = np.asarray(groups)
-    uniq, inv = _unique_groups_index(groups)
+    uniq, inv = unique_groups_index(groups)
 
     y_score = np.asarray(y_score)
     if n_classes == 2 and y_score.ndim == 1:
@@ -267,18 +267,18 @@ def _aggregate_group_scores(y_score, groups, n_classes, agg='mean'):
             raise ValueError(f"Unknown agg '{agg}'. Use 'mean' | 'median' | 'vote'.")
     return uniq, agg_scores.squeeze()
 
-def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
+def evaluate_group_level_classification(y_true, y_score, groups, unique_labels_encoded,
                          agg='mean', threshold=0.8, proportion=0.3):
 
     n_classes = len(unique_labels_encoded)
 
-    g_ids_truth, y_true_g = _derive_group_truth(y_true, groups, strategy='strict')
+    g_ids_truth, y_true_g = derive_group_truth(y_true, groups, strategy='strict')
 
     if agg in ('mean', 'median', 'vote'):
-        g_ids_pred, g_scores = _aggregate_group_scores(y_score, groups, n_classes, agg=agg)
+        g_ids_pred, g_scores = aggregate_group_scores(y_score, groups, n_classes, agg=agg)
 
     elif agg == 'max':
-        uniq, inv = _unique_groups_index(groups)
+        uniq, inv = unique_groups_index(groups)
         y_score = np.asarray(y_score)
         if n_classes == 2 and y_score.ndim == 1:
             g_scores = np.zeros(len(uniq))
@@ -293,7 +293,7 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
     elif agg == 'proportion':
         if n_classes != 2:
             raise ValueError("agg='proportion' is only defined for binary classification.")
-        uniq, inv = _unique_groups_index(groups)
+        uniq, inv = unique_groups_index(groups)
         y_score = np.asarray(y_score)
 
         g_scores = np.zeros(len(uniq))
@@ -338,9 +338,9 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
         "group_ids": g_ids_truth
     }
 
-def _aggregate_group_values(y, groups, agg='mean'):
+def aggregate_group_values(y, groups, agg='mean', param=None):
     y = np.asarray(y, dtype=float).ravel()
-    uniq, inv = _unique_groups_index(groups)
+    uniq, inv = unique_groups_index(groups)
     out = np.empty(len(uniq), dtype=float)
     for g_idx in range(len(uniq)):
         vals = y[inv == g_idx]
@@ -352,13 +352,16 @@ def _aggregate_group_values(y, groups, agg='mean'):
             out[g_idx] = float(np.median(vals))
         elif agg == 'max':
             out[g_idx] = float(np.max(vals))
+        elif agg == 'percentile':
+            q = param if param is not None else 90
+            out[g_idx] = np.percentile(vals, q)
         else:
             raise ValueError("Unknown agg for regression. Use 'mean' | 'median' | 'max'.")
     return uniq, out
 
-def evaluate_group_level_regression(y_true, y_pred, groups, agg='mean'):
-    uniq_t, y_true_g = _aggregate_group_values(y_true, groups, agg=agg)
-    uniq_p, y_pred_g = _aggregate_group_values(y_pred, groups, agg=agg)
+def evaluate_group_level_regression(y_true, y_pred, groups, agg='mean', param=None):
+    uniq_t, y_true_g = aggregate_group_values(y_true, groups, agg=agg, param=param)
+    uniq_p, y_pred_g = aggregate_group_values(y_pred, groups, agg=agg, param=param)
     assert np.array_equal(uniq_t, uniq_p), "Mismatch in group ids alignment."
 
     diff = y_pred_g - y_true_g
@@ -499,7 +502,8 @@ def aggregate_result(
     agg_group,
     agg_method="mean",
     threshold=0.5,
-    proportion=None
+    proportion=None,
+    param=None
 ):
     # pull arrays from META (with legacy fallbacks)
     y_true  = np.asarray(getattr(res.meta, "y_true",
@@ -524,7 +528,7 @@ def aggregate_result(
         if y_score is None and y_pred is not None:
             # tolerate pipelines that stored only y_pred as scores
             y_score = np.asarray(y_pred, dtype=float)
-        group_eval = evaluate_group_level(
+        group_eval = evaluate_group_level_classification(
             y_true=y_true,
             y_score=y_score,
             groups=groups_test,
@@ -553,7 +557,8 @@ def aggregate_result(
             y_true=y_true,
             y_pred=np.asarray(y_pred, dtype=float),
             groups=groups_test,
-            agg=agg_method  # 'mean' | 'median' | 'max'
+            agg=agg_method,  # 'mean' | 'median' | 'max'
+            param=param
         )
         results_dict = {
             k: group_eval[k] for k in ("mae","mse","rmse","r2") if k in group_eval
