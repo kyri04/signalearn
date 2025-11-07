@@ -66,7 +66,7 @@ def classify(
             **unique_cnts
         },
         set_params={
-            "label": label,
+            "target": target,
             "group": group,
             "algorithm": algorithm,
             "test_size": test_size,
