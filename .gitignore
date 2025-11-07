@@ -3,8 +3,8 @@
 !/.gitignore
 !/LICENSE
 !/.mplstyle
+!/requirements.txt
 
 */
-
 !/plot-styles/
 !/plot-styles/**
