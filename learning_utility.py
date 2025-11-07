@@ -338,6 +338,52 @@ def evaluate_group_level(y_true, y_score, groups, unique_labels_encoded,
         "group_ids": g_ids_truth
     }
 
+def _aggregate_group_values(y, groups, agg='mean'):
+    y = np.asarray(y, dtype=float).ravel()
+    uniq, inv = _unique_groups_index(groups)
+    out = np.empty(len(uniq), dtype=float)
+    for g_idx in range(len(uniq)):
+        vals = y[inv == g_idx]
+        if vals.size == 0:
+            out[g_idx] = np.nan
+        elif agg == 'mean':
+            out[g_idx] = float(np.mean(vals))
+        elif agg == 'median':
+            out[g_idx] = float(np.median(vals))
+        elif agg == 'max':
+            out[g_idx] = float(np.max(vals))
+        else:
+            raise ValueError("Unknown agg for regression. Use 'mean' | 'median' | 'max'.")
+    return uniq, out
+
+def evaluate_group_level_regression(y_true, y_pred, groups, agg='mean'):
+    uniq_t, y_true_g = _aggregate_group_values(y_true, groups, agg=agg)
+    uniq_p, y_pred_g = _aggregate_group_values(y_pred, groups, agg=agg)
+    assert np.array_equal(uniq_t, uniq_p), "Mismatch in group ids alignment."
+
+    diff = y_pred_g - y_true_g
+    m = np.isfinite(diff) & np.isfinite(y_true_g)
+    yt, yp, df = y_true_g[m], y_pred_g[m], diff[m]
+    if yt.size == 0:
+        mae = mse = rmse = r2 = np.nan
+    else:
+        mae  = float(np.mean(np.abs(df)))
+        mse  = float(np.mean(df**2))
+        rmse = float(np.sqrt(mse))
+        ss_res = float(np.sum(df**2))
+        ss_tot = float(np.sum((yt - yt.mean())**2))
+        r2 = float(1.0 - ss_res/ss_tot) if ss_tot > 0 else float("nan")
+
+    return {
+        "mae": mae,
+        "mse": mse,
+        "rmse": rmse,
+        "r2": r2,
+        "y_true": y_true_g,
+        "y_pred": y_pred_g,
+        "group_ids": uniq_t
+    }
+
 def combine_volume(results_list):
     all_keys = set()
     for r in results_list:
@@ -451,40 +497,85 @@ def combine_results(results):
 def aggregate_result(
     res,
     agg_group,
-    agg_method = "mean",
-    threshold = 0.5,
-    proportion = None
+    agg_method="mean",
+    threshold=0.5,
+    proportion=None
 ):
+    # pull arrays from META (with legacy fallbacks)
+    y_true  = np.asarray(getattr(res.meta, "y_true",
+                        getattr(res.results, "y_true", [])))
+    y_score = getattr(res.meta, "y_score",
+              getattr(res.results, "y_score", None))
+    y_pred  = getattr(res.meta, "y_pred", None)
 
-    y_true  = np.asarray(res.results.y_true)
-    y_score = np.asarray(res.results.y_score)
-
-    test_meta = getattr(res.results, "test_meta", None)
+    test_meta = getattr(res.meta, "test_meta",
+                getattr(res.results, "test_meta", None))
+    if test_meta is None or agg_group not in test_meta:
+        raise KeyError(f"agg_group '{agg_group}' not found in test_meta")
     groups_test = np.asarray(test_meta[agg_group])
 
-    unique_labels_encoded = np.unique(y_true)
+    # classification if we have class info or scores; else regression
+    unique_labels_encoded = getattr(res.params, "unique_labels", None)
+    is_classification = (unique_labels_encoded is not None) or (y_score is not None)
 
-    group_eval = evaluate_group_level(
-        y_true=y_true,
-        y_score=y_score,
-        groups=groups_test,
-        unique_labels_encoded=unique_labels_encoded,
-        agg=agg_method,
-        threshold=threshold,
-        proportion=proportion
-    )
+    if is_classification:
+        if unique_labels_encoded is None:
+            unique_labels_encoded = np.unique(y_true)
+        if y_score is None and y_pred is not None:
+            # tolerate pipelines that stored only y_pred as scores
+            y_score = np.asarray(y_pred, dtype=float)
+        group_eval = evaluate_group_level(
+            y_true=y_true,
+            y_score=y_score,
+            groups=groups_test,
+            unique_labels_encoded=unique_labels_encoded,
+            agg=agg_method,
+            threshold=threshold,
+            proportion=proportion
+        )
+        # split metrics vs meta for Result
+        results_dict = {
+            k: group_eval[k] for k in
+            ("accuracy","specificity","sensitivity","precision","recall","f1")
+            if k in group_eval
+        }
+        meta_dict = {
+            "conf_matrix": group_eval.get("conf_matrix"),
+            "y_true": group_eval.get("y_true"),
+            "y_score": group_eval.get("y_score"),
+            "group_ids": group_eval.get("group_ids"),
+        }
 
-    new_params = make_namespace({
+    else:
+        if y_pred is None:
+            raise ValueError("Regression aggregation requires meta.y_pred.")
+        group_eval = evaluate_group_level_regression(
+            y_true=y_true,
+            y_pred=np.asarray(y_pred, dtype=float),
+            groups=groups_test,
+            agg=agg_method  # 'mean' | 'median' | 'max'
+        )
+        results_dict = {
+            k: group_eval[k] for k in ("mae","mse","rmse","r2") if k in group_eval
+        }
+        meta_dict = {
+            "y_true": group_eval.get("y_true"),
+            "y_pred": group_eval.get("y_pred"),
+            "group_ids": group_eval.get("group_ids"),
+        }
+
+    new_params = {
         **vars(res.params),
         "mode": "group",
         "agg_group": agg_group,
         "group_agg": agg_method,
         "group_threshold": threshold,
-        "group_proportion": proportion
-    })
+        "group_proportion": proportion,
+    }
 
     return Result(
-        set_params=new_params,
-        set_volume=res.volume,
-        set_results=make_namespace(group_eval),
+        set_params=new_params,          # dicts, not SimpleNamespace
+        set_volume=vars(res.volume),    # keep original volume
+        set_results=results_dict,
+        set_meta=meta_dict
     )

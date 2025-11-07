@@ -98,9 +98,15 @@ def format_confusion_matrix(conf_matrix, labels):
         return "\n".join(output)
 
 def format_attributes(obj, title):
-        lines = []
-        lines.append(title)
-        for k, v in vars(obj).items():
-            lines.append(f"{k}: {v}")
+    lines = [title]
+    for k, v in vars(obj).items():
+        if isinstance(v, float):
+            v = f"{v:.3f}"
+        else:
+            v = str(v)
 
-        return "\n\n".join(lines)
+        if "\n" in v:
+            lines.append(f"{k}:\n{v}")
+        else:
+            lines.append(f"{k}: {v}")
+    return "\n".join(lines)

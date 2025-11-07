@@ -309,8 +309,8 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
 def plot_rocs(results):
     plt.close('all')
     fig, ax = plt.subplots()
-    valid = [r.group_results for r in results
-             if (r.group_results.y_true is not None and r.group_results.y_score is not None)]
+    valid = [r.meta for r in results
+             if (r.meta.y_true is not None and r.meta.y_score is not None)]
 
     roc_data = []
     for r in valid:
