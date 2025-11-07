@@ -8,7 +8,7 @@ import numpy as np
 def classify(
     points,
     y_attr,
-    label,
+    target,
     group=None,
     algorithm="rf",
     test_size=0.2,
@@ -20,7 +20,7 @@ def classify(
     
     ys = np.array([getattr(point, y_attr) for point in points])
     
-    labels = prepare_labels(points, label)
+    labels = prepare_labels(points, target)
     groups = prepare_groups(points, group)
 
     labels_encoded, encoder = encode(labels)
@@ -176,7 +176,7 @@ def regress(
 
 def shuffle_learn(
     points, 
-    label, 
+    target, 
     y_attr,
     learn_func,
     group=None, 
@@ -190,7 +190,7 @@ def shuffle_learn(
         results.append(learn_func(
             points=points, 
             y_attr=y_attr,
-            label = label, 
+            target = target, 
             group = group,
             algorithm = algorithm, 
             test_size = test_size,  
@@ -202,7 +202,7 @@ def shuffle_learn(
 def attr_curve(
     points, 
     y_attr,
-    label, 
+    target, 
     by_attribute,
     learn_func,
     group=None, 
@@ -238,7 +238,7 @@ def attr_curve(
             res_list = shuffle_learn(
                 subset=subset,
                 y_attr=y_attr,
-                label=label,
+                target=target,
                 learn_func=learn_func,
                 group=group,
                 algorithm=algorithm,
@@ -252,7 +252,7 @@ def attr_curve(
             res = learn_func(
                 points=subset,
                 y_attr=y_attr,
-                label=label,
+                target=target,
                 group=group,
                 algorithm=algorithm,
                 test_size=test_size,
@@ -265,7 +265,7 @@ def attr_curve(
 
 def data_curve(
     points, 
-    label, 
+    target, 
     y_attr,
     learn_func,
     group=None, 
@@ -288,7 +288,7 @@ def data_curve(
             res_list = shuffle_learn(
                 points=subset,
                 y_attr=y_attr,
-                label=label,
+                target=target,
                 learn_func=learn_func,
                 group=group,
                 algorithm=algorithm,
@@ -303,7 +303,7 @@ def data_curve(
             res = learn_func(
                 points=subset,
                 y_attr=y_attr,
-                label=label,
+                target=target,
                 group=group,
                 algorithm=algorithm,
                 test_size=test_size,
