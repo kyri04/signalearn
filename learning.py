@@ -174,6 +174,138 @@ def regress(
     )
     return res
 
+def ordinal_classify(
+    points,
+    y_attr,
+    target,
+    group=None,
+    algorithm="rf",
+    test_size=0.2,
+    split_state=42,
+    scale=False,
+    cutoff=0.5
+):
+    N = len(points)
+
+    X = np.asarray([getattr(p, y_attr) for p in points], dtype=float)
+
+    y_all = np.array([int(getattr(p, target, None)) for p in points], dtype=object)
+    mask = np.array([v is not None for v in y_all], dtype=bool)
+    if not mask.all():
+        X = X[mask]
+        points = [p for i, p in enumerate(points) if mask[i]]
+        y_all = y_all[mask]
+        N = len(points)
+    y_all = y_all.astype(int)
+
+    classes = np.array(sorted(np.unique(y_all)))
+    groups_arr = prepare_groups(points, group)
+
+    train_idx, test_idx = get_single_split(N, y_all, groups_arr, test_size, split_state)
+    if groups_arr is not None:
+        tr_g, te_g = set(groups_arr[train_idx]), set(groups_arr[test_idx])
+        assert tr_g.isdisjoint(te_g)
+
+    X_train_raw, X_test_raw = X[train_idx], X[test_idx]
+    y_train_all, y_test_all = y_all[train_idx], y_all[test_idx]
+
+    if scale:
+        X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
+    else:
+        X_train, X_test = X_train_raw, X_test_raw
+
+    thresholds = classes[1:]
+    K = thresholds.size
+
+    P_ge = np.zeros((X_test.shape[0], K), dtype=float)
+    models = []
+    imps = []
+
+    for k_idx, thr in enumerate(thresholds):
+        y_train_bin = (y_train_all >= thr).astype(int)
+
+        if len(np.unique(y_train_bin)) < 2:
+            const = float(y_train_bin.mean())
+            P_ge[:, k_idx] = const
+            models.append(None)
+            imps.append(None)
+            continue
+
+        clf = get_classifier(algorithm)
+        clf.fit(X_train, y_train_bin)
+
+        n_classes = 2
+        p = positive_class_scores(clf, X_test, n_classes=n_classes)
+        if p.ndim > 1:
+            p = p[:, 1]
+        P_ge[:, k_idx] = p
+        models.append(clf)
+
+        fi = get_feature_importances(clf)
+        imps.append(fi if fi is not None else None)
+
+    probs = np.zeros((X_test.shape[0], classes.size), dtype=float)
+    probs[:, 0] = 1.0 - P_ge[:, 0]
+    if K > 1:
+        probs[:, 1:-1] = P_ge[:, :-1] - P_ge[:, 1:]
+    probs[:, -1] = P_ge[:, -1]
+
+    probs = np.clip(probs, 0.0, 1.0)
+    s = probs.sum(axis=1, keepdims=True)
+    s[s == 0] = 1.0
+    probs /= s
+
+    passes = (P_ge >= float(cutoff)).sum(axis=1)
+    y_pred = classes[passes]
+    y_true = y_test_all
+
+    conf = confusion_matrix(y_true, y_pred, labels=classes)
+    acc, spec, sens, prec, rec, f1 = calculate_metrics(conf)
+
+    fi_stack = [np.asarray(v) for v in imps if v is not None]
+    feat_imp = np.mean(fi_stack, axis=0) if fi_stack and len({v.shape for v in fi_stack}) == 1 else None
+
+    pt0_attrs = set(points[train_idx[0]].__dict__) - set(get_attributes(Series))
+    unique_cnts = {a: count_unique(points, a) for a in sorted(pt0_attrs)}
+    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+
+    return Result(
+        set_volume={
+            "points": N,
+            **unique_cnts
+        },
+        set_params={
+            "target": target,
+            "group": group,
+            "algorithm": algorithm,
+            "test_size": test_size,
+            "split_state": split_state,
+            "mode": "ordinal",
+            "ordinal_thresholds": thresholds.tolist(),
+            "cutoff": float(cutoff),
+            "unique_labels": classes
+        },
+        set_results={
+            "accuracy": acc,
+            "specificity": spec,
+            "sensitivity": sens,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1
+        },
+        set_meta={
+            "conf_matrix": conf,
+            "y_true": y_true,
+            "y_pred": y_pred,
+            "y_score": probs,
+            "threshold_scores": P_ge,
+            "feature_importances": feat_imp,
+            "test_index": test_idx,
+            "test_meta": test_meta,
+            "models": models
+        }
+    )
+
 def shuffle_learn(
     points, 
     target, 
