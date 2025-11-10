@@ -523,11 +523,13 @@ def aggregate_result(
     is_classification = (unique_labels_encoded is not None) or (y_score is not None)
 
     if is_classification:
-        if unique_labels_encoded is None:
-            unique_labels_encoded = np.unique(y_true)
+        # Always derive labels from the y_true actually present here
+        y_true = np.asarray(y_true)
+        unique_labels_encoded = np.unique(y_true)
+
         if y_score is None and y_pred is not None:
-            # tolerate pipelines that stored only y_pred as scores
             y_score = np.asarray(y_pred, dtype=float)
+
         group_eval = evaluate_group_level_classification(
             y_true=y_true,
             y_score=y_score,
