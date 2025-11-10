@@ -586,3 +586,78 @@ def aggregate_result(
         set_results=results_dict,
         set_meta=meta_dict
     )
+
+def optimise_group_threshold_proportion(
+    res,
+    agg_group="id_sample",
+    agg_method="proportion",
+    n_steps=21,
+):
+    """
+    Search threshold and proportion in [0, 1] to maximise group-level F1.
+
+    Parameters
+    ----------
+    res : Result
+        Base per-scan Result object (e.g. results[0]).
+    agg_group : str
+        Grouping key, e.g. 'id_sample'.
+    agg_method : str
+        Aggregation method, e.g. 'proportion'.
+    n_steps : int
+        Number of grid steps per axis (default 21 -> step of 0.05).
+
+    Returns
+    -------
+    best_result : Result
+        Result object from learning_utility.aggregate_result with best F1.
+    best_params : dict
+        Dict with 'threshold', 'proportion', and 'f1'.
+    """
+    # grid in [0, 1], excluding exact 0 and 1 to avoid edge weirdness
+    proportions = np.linspace(0.0, 1.0, n_steps)
+    thresholds  = np.linspace(0.0, 1.0, n_steps)
+
+    best_f1 = None
+    best_result = None
+    best_p = None
+    best_t = None
+
+    for p in proportions:
+        if p <= 0.0 or p >= 1.0:
+            continue
+        for t in thresholds:
+            if t <= 0.0 or t >= 1.0:
+                continue
+
+            try:
+                agg_res = aggregate_result(
+                    res,
+                    agg_group=agg_group,
+                    agg_method=agg_method,
+                    threshold=t,
+                    proportion=p,
+                )
+            except Exception:
+                # skip combinations that cause aggregation errors
+                continue
+
+            f1 = getattr(agg_res.results, "f1", None)
+            if f1 is None:
+                continue
+
+            if (best_f1 is None) or (f1 > best_f1):
+                best_f1 = f1
+                best_result = agg_res
+                best_p = p
+                best_t = t
+
+    if best_result is None:
+        raise ValueError("No valid (threshold, proportion) pair produced an F1 score.")
+
+    best_params = {
+        "threshold": best_t,
+        "proportion": best_p,
+        "f1": best_f1,
+    }
+    return best_result, best_params
