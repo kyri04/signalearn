@@ -88,7 +88,7 @@ def get_classifier(method):
         "dt": DecisionTreeClassifier(random_state=42),
         "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10, class_weight='balanced'),
         "svm": SVC(random_state=42, probability=True),
-        "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=1000),
+        "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=10000),
         "knn": KNeighborsClassifier(),
         "gb": GradientBoostingClassifier(random_state=42),
     }

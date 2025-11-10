@@ -286,3 +286,13 @@ def grid_boundaries(points, xattr, yattr, sizeattr, include_empty=True, exclude_
                 pts.append(p)
         out.append(pts)
     return out
+
+def remove_non_numeric(points, attr):
+    ok = []
+    for i, p in enumerate(points):
+        y = np.asarray(getattr(p, attr))
+        if y.dtype.kind in "fiu":
+            ok.append(p)
+        else:
+            print(f"Removing {p.name} with non-numeric {attr}")
+    return ok
