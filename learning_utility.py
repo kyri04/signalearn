@@ -587,14 +587,21 @@ def aggregate_result(
         set_meta=meta_dict
     )
 
-def optimise_group_threshold_proportion(
+import numpy as np
+from signalearn import learning_utility
+
+
+def optimise_group_sens_spec(
     res,
     agg_group="id_sample",
     agg_method="proportion",
     n_steps=21,
 ):
     """
-    Search threshold and proportion in [0, 1] to maximise group-level F1.
+    Grid-search threshold and proportion in [0, 1] to maximise
+    a combined sensitivity/specificity score.
+
+    Score used: (sensitivity + specificity) / 2  (balanced accuracy)
 
     Parameters
     ----------
@@ -605,23 +612,25 @@ def optimise_group_threshold_proportion(
     agg_method : str
         Aggregation method, e.g. 'proportion'.
     n_steps : int
-        Number of grid steps per axis (default 21 -> step of 0.05).
+        Number of grid steps per axis (default 21 -> ~0.05 step).
 
     Returns
     -------
     best_result : Result
-        Result object from learning_utility.aggregate_result with best F1.
+        Result from learning_utility.aggregate_result with best score.
     best_params : dict
-        Dict with 'threshold', 'proportion', and 'f1'.
+        Dict with 'threshold', 'proportion', 'sensitivity',
+        'specificity', and 'score'.
     """
-    # grid in [0, 1], excluding exact 0 and 1 to avoid edge weirdness
     proportions = np.linspace(0.0, 1.0, n_steps)
     thresholds  = np.linspace(0.0, 1.0, n_steps)
 
-    best_f1 = None
+    best_score = None
     best_result = None
     best_p = None
     best_t = None
+    best_sens = None
+    best_spec = None
 
     for p in proportions:
         if p <= 0.0 or p >= 1.0:
@@ -631,7 +640,7 @@ def optimise_group_threshold_proportion(
                 continue
 
             try:
-                agg_res = aggregate_result(
+                agg_res = learning_utility.aggregate_result(
                     res,
                     agg_group=agg_group,
                     agg_method=agg_method,
@@ -639,25 +648,33 @@ def optimise_group_threshold_proportion(
                     proportion=p,
                 )
             except Exception:
-                # skip combinations that cause aggregation errors
+                # skip combinations that fail aggregation
                 continue
 
-            f1 = getattr(agg_res.results, "f1", None)
-            if f1 is None:
+            sens = getattr(agg_res.results, "sensitivity", None)
+            spec = getattr(agg_res.results, "specificity", None)
+
+            if sens is None or spec is None:
                 continue
 
-            if (best_f1 is None) or (f1 > best_f1):
-                best_f1 = f1
+            score = 0.5 * (sens + spec)  # balanced accuracy
+
+            if (best_score is None) or (score > best_score):
+                best_score = score
                 best_result = agg_res
                 best_p = p
                 best_t = t
+                best_sens = sens
+                best_spec = spec
 
     if best_result is None:
-        raise ValueError("No valid (threshold, proportion) pair produced an F1 score.")
+        raise ValueError("No valid (threshold, proportion) pair produced sensitivity/specificity.")
 
     best_params = {
         "threshold": best_t,
         "proportion": best_p,
-        "f1": best_f1,
+        "sensitivity": best_sens,
+        "specificity": best_spec,
+        "score": best_score,
     }
     return best_result, best_params

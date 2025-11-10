@@ -295,7 +295,7 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
     first_point = groups[0][0] if groups and groups[0] else None
     func_name = func.__name__ if callable(func) else ""
 
-    ylabel = get_axes_labels(points[0], y_attr)
+    ylabel = first_point.units[y_attr]
     x_label_core = f"{yfunc.__name__} {ylabel}".strip()
 
     ax.set_xlabel(f"{func_name}({x_label_core})" if func_name else x_label_core)
