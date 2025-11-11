@@ -197,36 +197,23 @@ def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
     return filtered
 
 def gaussian_mix(points, y_attr, tau=0.9):
-    feats = []
-    valid_idx = []
-
-    for i, p in enumerate(points):
-        y = np.asarray(getattr(p, y_attr), float)
+    feats, means = [], []
+    for p in points:
+        # y = np.asarray(p.y, float)
+        y = getattr(p, y_attr)
         y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-
-        if y.size == 0 or not np.isfinite(y).any():
-            continue
-
         m = y.mean()
         a = trapz(y)
         s = y.std()
         mx = y.max()
 
-        eps = 1e-9
-        feat = [np.log(m + eps), np.log(a + eps), s, mx]
-
-        if np.all(np.isfinite(feat)):
-            feats.append(feat)
-            valid_idx.append(i)
-
-    if not feats:
-        # nothing usable for GMM; keep everything, drop nothing
-        kept = list(points)
-        dropped = []
-        calculate_filtered(points, kept)
-        return kept, dropped
+        eps=1e-9
+        feats.append([np.log(m+eps), np.log(a+eps), s, mx])
+        means.append(m)
 
     X = np.asarray(feats)
+    m = np.isfinite(X).all(axis=1)
+    X = X[m]
     scaler = StandardScaler()
     Xz = scaler.fit_transform(X)
 
@@ -234,22 +221,15 @@ def gaussian_mix(points, y_attr, tau=0.9):
     gmm.fit(Xz)
     post = gmm.predict_proba(Xz)
 
-    # identify "empty" component using inverse-transformed means
-    comp_means = scaler.inverse_transform(gmm.means_)
-    # index 1 here is log(area); change if you reorder features
-    empty_comp = np.argmin(comp_means[:, 1])
-
+    empty_comp = np.argmin(gmm.means_[:, 1])
     p_empty = post[:, empty_comp]
+
     keep_mask = p_empty < tau
-
-    kept_idx = [idx for idx, k in zip(valid_idx, keep_mask) if k]
-    dropped_idx = [idx for idx, k in zip(valid_idx, keep_mask) if not k]
-
-    # by design, points that were invalid for GMM are kept
-    kept = [points[i] for i in range(len(points)) if (i in kept_idx or i not in valid_idx)]
-    dropped = [points[i] for i in dropped_idx]
+    kept = [p for p, k in zip(points, keep_mask) if k]
+    dropped = [p for p, k in zip(points, keep_mask) if not k]
 
     calculate_filtered(points, kept)
+
     return kept, dropped
 
 def fourier(points, x_attr, y_attr):

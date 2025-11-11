@@ -462,15 +462,6 @@ def combine_results(results):
     else:
         combined_feat_imp = None
 
-    vol0 = vars(first.volume)
-    combined_volume = {}
-    for k in vol0.keys():
-        vals = [getattr(r.volume, k, None) for r in results]
-        if all(isinstance(v, (int,float,np.number)) for v in vals if v is not None):
-            combined_volume[k] = float(np.nansum([float(v) for v in vals if v is not None]))
-        else:
-            combined_volume[k] = vol0[k]
-
     combined_params = {
         **vars(first.params),
         "mode": f"{getattr(first.params, 'mode', 'combined')}_combined",
@@ -491,7 +482,6 @@ def combine_results(results):
 
     combined = Result(
         set_params = combined_params,
-        set_volume = combined_volume,
         set_results = agg,
         set_meta = combined_meta
     )
@@ -505,7 +495,6 @@ def aggregate_result(
     proportion=None,
     param=None
 ):
-    # pull arrays from META (with legacy fallbacks)
     y_true  = np.asarray(getattr(res.meta, "y_true",
                         getattr(res.results, "y_true", [])))
     y_score = getattr(res.meta, "y_score",
@@ -518,12 +507,10 @@ def aggregate_result(
         raise KeyError(f"agg_group '{agg_group}' not found in test_meta")
     groups_test = np.asarray(test_meta[agg_group])
 
-    # classification if we have class info or scores; else regression
     unique_labels_encoded = getattr(res.params, "unique_labels", None)
     is_classification = (unique_labels_encoded is not None) or (y_score is not None)
 
     if is_classification:
-        # Always derive labels from the y_true actually present here
         y_true = np.asarray(y_true)
         unique_labels_encoded = np.unique(y_true)
 
@@ -539,7 +526,6 @@ def aggregate_result(
             threshold=threshold,
             proportion=proportion
         )
-        # split metrics vs meta for Result
         results_dict = {
             k: group_eval[k] for k in
             ("accuracy","specificity","sensitivity","precision","recall","f1")
@@ -559,7 +545,7 @@ def aggregate_result(
             y_true=y_true,
             y_pred=np.asarray(y_pred, dtype=float),
             groups=groups_test,
-            agg=agg_method,  # 'mean' | 'median' | 'max'
+            agg=agg_method,
             param=param
         )
         results_dict = {
@@ -581,100 +567,129 @@ def aggregate_result(
     }
 
     return Result(
-        set_params=new_params,          # dicts, not SimpleNamespace
-        set_volume=vars(res.volume),    # keep original volume
+        set_params=new_params,
         set_results=results_dict,
         set_meta=meta_dict
     )
 
-import numpy as np
-from signalearn import learning_utility
+def combine_ordinal_results(results, cutoff=0.5):
+    thresholds = sorted(results.keys())
+    ordered_results = [results[thr] for thr in thresholds]
+    first_result = ordered_results[0]
 
+    score_maps = []
+    index_sets = []
+    for res in ordered_results:
+        y_score = getattr(res.meta, "y_score", None)
+        test_idx = getattr(res.meta, "test_index", None)
 
-def optimise_group_sens_spec(
-    res,
-    agg_group="id_sample",
-    agg_method="proportion",
-    n_steps=21,
-):
-    """
-    Grid-search threshold and proportion in [0, 1] to maximise
-    a combined sensitivity/specificity score.
+        y_score = np.asarray(y_score, dtype=float)
+        test_idx = np.asarray(test_idx, dtype=int)
+        if y_score.ndim > 1:
+            y_score = y_score[:, -1]
 
-    Score used: (sensitivity + specificity) / 2  (balanced accuracy)
+        score_maps.append(dict(zip(test_idx.tolist(), y_score.tolist())))
+        index_sets.append(set(test_idx.tolist()))
 
-    Parameters
-    ----------
-    res : Result
-        Base per-scan Result object (e.g. results[0]).
-    agg_group : str
-        Grouping key, e.g. 'id_sample'.
-    agg_method : str
-        Aggregation method, e.g. 'proportion'.
-    n_steps : int
-        Number of grid steps per axis (default 21 -> ~0.05 step).
+    common_indices = sorted(set.intersection(*index_sets))
 
-    Returns
-    -------
-    best_result : Result
-        Result from learning_utility.aggregate_result with best score.
-    best_params : dict
-        Dict with 'threshold', 'proportion', 'sensitivity',
-        'specificity', and 'score'.
-    """
-    proportions = np.linspace(0.0, 1.0, n_steps)
-    thresholds  = np.linspace(0.0, 1.0, n_steps)
+    prob_matrix = np.array(
+        [[score_map[idx] for score_map in score_maps] for idx in common_indices],
+        dtype=float
+    )
+    passes = np.clip((prob_matrix >= cutoff).sum(axis=1), 0, len(thresholds)).astype(int)
 
-    best_score = None
-    best_result = None
-    best_p = None
-    best_t = None
-    best_sens = None
-    best_spec = None
+    def _infer_target_name(res, thr):
+        target_name = getattr(res.params, "target", "")
+        prefix = "ordinal_"
+        suffix = f"_{thr}"
+        if isinstance(target_name, str) and target_name.startswith(prefix):
+            core = target_name[len(prefix):]
+            if core.endswith(suffix):
+                core = core[: -len(suffix)]
+            return core.rstrip("_") or target_name
+        return target_name
 
-    for p in proportions:
-        if p <= 0.0 or p >= 1.0:
-            continue
-        for t in thresholds:
-            if t <= 0.0 or t >= 1.0:
-                continue
-
+    def _count_thresholds(label_val):
+        count = 0
+        for thr in thresholds:
             try:
-                agg_res = learning_utility.aggregate_result(
-                    res,
-                    agg_group=agg_group,
-                    agg_method=agg_method,
-                    threshold=t,
-                    proportion=p,
-                )
-            except Exception:
-                # skip combinations that fail aggregation
-                continue
+                passed = label_val >= thr
+            except TypeError:
+                passed = str(label_val) >= str(thr)
+            if passed:
+                count += 1
+        return count
 
-            sens = getattr(agg_res.results, "sensitivity", None)
-            spec = getattr(agg_res.results, "specificity", None)
+    base_target = _infer_target_name(first_result, thresholds[0])
+    first_test_idx = np.asarray(getattr(first_result.meta, "test_index", []), dtype=int)
+    idx_to_pos = {idx: pos for pos, idx in enumerate(first_test_idx)}
+    selected_positions = [idx_to_pos[idx] for idx in common_indices]
 
-            if sens is None or spec is None:
-                continue
+    test_meta = getattr(first_result.meta, "test_meta", None)
+    y_true_labels = None
+    if isinstance(test_meta, dict) and base_target in test_meta:
+        target_vals = np.asarray(test_meta[base_target])
+        y_true_labels = target_vals[selected_positions]
 
-            score = 0.5 * (sens + spec)  # balanced accuracy
+    y_true_encoded = None
+    if y_true_labels is not None and len(y_true_labels) == len(common_indices):
+        y_true_encoded = np.array([_count_thresholds(lbl) for lbl in y_true_labels], dtype=int)
 
-            if (best_score is None) or (score > best_score):
-                best_score = score
-                best_result = agg_res
-                best_p = p
-                best_t = t
-                best_sens = sens
-                best_spec = spec
+    n_classes = len(thresholds) + 1
+    conf_matrix = None
+    accuracy = specificity = sensitivity = precision = recall = f1 = None
+    if y_true_encoded is not None:
+        labels = np.arange(n_classes, dtype=int)
+        conf_matrix = confusion_matrix(y_true_encoded, passes, labels=labels)
+        average = "binary" if n_classes == 2 else "macro"
+        accuracy, specificity, sensitivity, precision, recall, f1 = calculate_metrics(
+            conf_matrix, average=average
+        )
 
-    if best_result is None:
-        raise ValueError("No valid (threshold, proportion) pair produced sensitivity/specificity.")
+    filtered_test_meta = None
+    if isinstance(test_meta, dict):
+        filtered_test_meta = {}
+        for key, values in test_meta.items():
+            arr = np.asarray(values)
+            filtered_test_meta[key] = arr[selected_positions]
 
-    best_params = {
-        "threshold": best_t,
-        "proportion": best_p,
-        "sensitivity": best_sens,
-        "specificity": best_spec,
-        "score": best_score,
+    set_params = {
+        "target": base_target,
+        "algorithm": getattr(first_result.params, "algorithm", None),
+        "group": getattr(first_result.params, "group", None),
+        "test_size": getattr(first_result.params, "test_size", None),
+        "split_state": getattr(first_result.params, "split_state", None),
+        "unique_labels": np.arange(n_classes),
+        "mode": "ordinal_combined",
+        "cutoff": cutoff,
+        "thresholds": thresholds,
     }
-    return best_result, best_params
+
+    set_results = {
+        "accuracy": accuracy,
+        "specificity": specificity,
+        "sensitivity": sensitivity,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    }
+
+    set_meta = {
+        "conf_matrix": conf_matrix,
+        "y_true": y_true_encoded,
+        "y_pred": passes,
+        "y_score": prob_matrix,
+        "test_index": np.array(common_indices, dtype=int),
+        "test_meta": filtered_test_meta,
+        "threshold_probs": prob_matrix,
+        "ordinal_counts": passes,
+        "thresholds": np.array(thresholds),
+        "cutoff": cutoff,
+    }
+
+    return Result(
+        set_params=set_params,
+        set_results=set_results,
+        set_meta=set_meta
+    )
