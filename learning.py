@@ -10,9 +10,10 @@ def classify(
     target,
     group=None,
     model=RandomForestClassifier(),
+    scaler=None,
+    sampler=None,
     test_size=0.2,
-    split_state=42,
-    scale=False
+    split_state=42
 ):
 
     N = len(points)
@@ -36,8 +37,10 @@ def classify(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
-    else: X_train, X_test = X_train_raw, X_test_raw
+    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
+
+    if sampler is not None:
+        X_train, y_train = sampler.fit_resample(X_train, y_train)
 
     model.fit(X_train, y_train)
 
@@ -63,6 +66,8 @@ def classify(
             "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
+            "scaler": scaler.__class__.__name__ if scaler is not None else None,
+            "sampler": sampler.__class__.__name__ if sampler is not None else None,
             "unique_labels": unique_labels,
             "mode": "normal"
         },
@@ -91,9 +96,10 @@ def regress(
     target,
     group=None,
     model=RandomForestRegressor(),
+    scaler=None,
+    sampler=None,
     test_size=0.2,
-    split_state=42,
-    scale=False
+    split_state=42
 ):
     N = len(points)
 
@@ -111,10 +117,10 @@ def regress(
     X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
-    if scale:
-        X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
-    else:
-        X_train, X_test = X_train_raw, X_test_raw
+    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
+
+    if sampler is not None:
+        X_train, y_train = sampler.fit_resample(X_train, y_train)
 
     model.fit(X_train, y_train)
 
@@ -139,6 +145,8 @@ def regress(
             "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
+            "scaler": scaler.__class__.__name__ if scaler is not None else None,
+            "sampler": sampler.__class__.__name__ if sampler is not None else None,
             "mode": "normal"
         },
         set_results={

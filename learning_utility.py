@@ -72,38 +72,17 @@ def get_single_split(N, y, groups, test_size=0.2, random_state=42):
         )
     return train_idx, test_idx
 
-def scale(y):
-    scaler = StandardScaler()
+def scale(y, scaler=StandardScaler()):
     return np.array(scaler.fit_transform(y))
 
-def standardize_train_test(X_train_raw, X_test_raw):
-    scaler = StandardScaler().fit(X_train_raw)
+def standardize_train_test(X_train_raw, X_test_raw, scaler):
+    if(scaler is None): return X_train_raw, X_test_raw
+
+    scaler.fit(X_train_raw)
     X_train = scaler.transform(X_train_raw)
     X_test = scaler.transform(X_test_raw)
 
     return X_train, X_test
-
-def get_classifier(method):
-    classifiers = {
-        "dt": DecisionTreeClassifier(random_state=42),
-        "rf": RandomForestClassifier(random_state=42, n_estimators=300, max_depth=10, class_weight='balanced'),
-        "svm": SVC(random_state=42, probability=True),
-        "lr": LogisticRegression(random_state=42, class_weight='balanced', max_iter=10000),
-        "knn": KNeighborsClassifier(),
-        "gb": GradientBoostingClassifier(random_state=42),
-    }
-    return classifiers[method]
-
-def get_regressor(method):
-    regressors = {
-        "dt": DecisionTreeRegressor(random_state=42),
-        "rf": RandomForestRegressor(random_state=42, n_estimators=300, max_depth=10),
-        "svm": SVR(),
-        "lr": LinearRegression(),
-        "knn": KNeighborsRegressor(),
-        "gb": GradientBoostingRegressor(random_state=42),
-    }
-    return regressors[method]
 
 def calculate_metrics(conf_matrix, average="binary", pos_index=1):
     C = conf_matrix.shape[0]

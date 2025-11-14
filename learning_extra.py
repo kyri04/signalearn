@@ -12,7 +12,8 @@ def ordinal_classify(
     model=RandomForestClassifier(),
     test_size=0.2,
     split_state=42,
-    scale=False
+    scaler=None,
+    sampler=None
 ):
     classes = sorted(find_unique(points, target))
     thresholds = classes[1:]
@@ -38,7 +39,8 @@ def ordinal_classify(
             model=model,
             test_size=test_size,
             split_state=split_state,
-            scale=scale,
+            scaler=scaler,
+            sampler=sampler
         )
 
         results[thr] = res
@@ -54,7 +56,8 @@ def shuffle_learn(
     group=None,  
     test_size=0.2,
     shuffles=5,
-    scale=False
+    scaler=None,
+    sampler=None
 ):
     results = []
     for rs in range(shuffles):
@@ -66,7 +69,9 @@ def shuffle_learn(
             model = model, 
             test_size = test_size,  
             split_state = rs,
-            scale=scale))
+            scaler=scaler,
+            sampler=sampler
+        ))
         
     return results
 
@@ -83,7 +88,8 @@ def attr_curve(
     divisions=5,
     start_val=0,
     shuffles_per_split=None,
-    scale=False
+    scaler=None,
+    sampler=None
 ):
 
     rng = np.random.default_rng(split_state)
@@ -115,7 +121,8 @@ def attr_curve(
                 model=model,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                scale=scale
+                scaler=scaler,
+                sampler=sampler
             )
             results.append(combine_results(res_list))
             
@@ -128,7 +135,8 @@ def attr_curve(
                 model=model,
                 test_size=test_size,
                 split_state=split_state,
-                scale=scale
+                scaler=scaler,
+                sampler=sampler
             )
             results.append(res)
 
@@ -146,7 +154,8 @@ def data_curve(
     divisions=5,
     start_fraction=0.05,
     shuffles_per_split=None,
-    scale=False
+    scaler=None,
+    sampler=None
 ):
 
     fractions = np.linspace(start_fraction, 1.0, divisions)
@@ -165,7 +174,8 @@ def data_curve(
                 model=model,
                 test_size=test_size,
                 shuffles=shuffles_per_split,
-                scale=scale
+                scaler=scaler,
+                sampler=sampler
             )
             res = combine_results(res_list)
             results.append(res)
@@ -179,7 +189,8 @@ def data_curve(
                 model=model,
                 test_size=test_size,
                 split_state=split_state,
-                scale=scale
+                scaler=scaler,
+                sampler=sampler
             )
             results.append(res)
 
