@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from collections import defaultdict
 import math
 
-def filter(points, attr, val):
+def filter(points, attr, val, includes=True):
     if isinstance(val, str):
         vals = [val.lower()]
     else:
@@ -21,7 +21,10 @@ def filter(points, attr, val):
         else:
             hasnt.append(point)
 
-    return has
+    if(includes):
+        return has
+    else:
+        return hasnt
 
 def load(filepath):
 
@@ -287,7 +290,7 @@ def grid_boundaries(points, xattr, yattr, sizeattr, include_empty=True, exclude_
         out.append(pts)
     return out
 
-def remove_non_numeric(points, attr):
+def filter_numeric(points, attr):
     ok = []
     for i, p in enumerate(points):
         y = np.asarray(getattr(p, attr))
@@ -296,3 +299,45 @@ def remove_non_numeric(points, attr):
         else:
             print(f"Removing {p.name} with non-numeric {attr}")
     return ok
+
+def normalise_int_attr(points, attr):
+    for p in points:
+        v = getattr(p, attr, None)
+        if isinstance(v, (int, list)):
+            continue
+
+        raw = str(v).strip()
+        cleaned = raw.strip('"').strip("'").strip()
+
+        if cleaned.upper() == "DATA MISSING":
+            continue
+
+        if cleaned.startswith('[') and cleaned.endswith(']'):
+            try:
+                parsed = ast.literal_eval(cleaned)
+            except Exception:
+                continue
+
+            if isinstance(parsed, (int, list)):
+                setattr(p, attr, parsed)
+            continue
+
+        if ',' in cleaned:
+            try:
+                values = [
+                    int(x.strip())
+                    for x in cleaned.split(',')
+                    if x.strip()
+                ]
+            except ValueError:
+                continue
+
+            setattr(p, attr, values)
+            continue
+
+        try:
+            scalar = int(cleaned)
+        except ValueError:
+            continue
+
+        setattr(p, attr, scalar)

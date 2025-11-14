@@ -66,7 +66,6 @@ def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
 
     global_start = max(starts)
     global_end   = min(ends)
-    usable_len = global_end - global_start
 
     start = global_start + num if front else global_start
     end   = global_end - num if back else global_end
@@ -79,8 +78,8 @@ def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
     trimmed = []
     for point in points:
         new_params = point.__dict__.copy()
-        new_params["x"] = getattr(point, x_attr)[sl]
-        new_params["y"] = getattr(point, y_attr)[sl]
+        new_params[x_attr] = getattr(point, x_attr)[sl]
+        new_params[y_attr] = getattr(point, y_attr)[sl]
         trimmed.append(point.__class__(new_params))
 
     return trimmed

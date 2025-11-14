@@ -9,7 +9,7 @@ def classify(
     y_attr,
     target,
     group=None,
-    algorithm="rf",
+    model=RandomForestClassifier(),
     test_size=0.2,
     split_state=42,
     scale=False
@@ -39,7 +39,6 @@ def classify(
     if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
     else: X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_classifier(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -61,7 +60,7 @@ def classify(
         set_params={
             "target": target,
             "group": group,
-            "algorithm": algorithm,
+            "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
             "unique_labels": unique_labels,
@@ -91,7 +90,7 @@ def regress(
     y_attr,
     target,
     group=None,
-    algorithm="rf",
+    model=RandomForestRegressor(),
     test_size=0.2,
     split_state=42,
     scale=False
@@ -117,7 +116,6 @@ def regress(
     else:
         X_train, X_test = X_train_raw, X_test_raw
 
-    model = get_regressor(algorithm)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -138,7 +136,7 @@ def regress(
         set_params={
             "target": target,
             "group": group,
-            "algorithm": algorithm,
+            "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
             "mode": "normal"
