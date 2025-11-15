@@ -66,7 +66,6 @@ def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
 
     global_start = max(starts)
     global_end   = min(ends)
-    usable_len = global_end - global_start
 
     start = global_start + num if front else global_start
     end   = global_end - num if back else global_end
@@ -79,8 +78,8 @@ def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
     trimmed = []
     for point in points:
         new_params = point.__dict__.copy()
-        new_params["x"] = getattr(point, x_attr)[sl]
-        new_params["y"] = getattr(point, y_attr)[sl]
+        new_params[x_attr] = getattr(point, x_attr)[sl]
+        new_params[y_attr] = getattr(point, y_attr)[sl]
         trimmed.append(point.__class__(new_params))
 
     return trimmed
@@ -196,10 +195,11 @@ def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
 
     return filtered
 
-def gaussian_mix(points, tau=0.9):
+def gaussian_mix(points, y_attr, tau=0.9):
     feats, means = [], []
     for p in points:
-        y = np.asarray(p.y, float)
+        # y = np.asarray(p.y, float)
+        y = getattr(p, y_attr)
         y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
         m = y.mean()
         a = trapz(y)

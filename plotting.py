@@ -295,7 +295,7 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
     first_point = groups[0][0] if groups and groups[0] else None
     func_name = func.__name__ if callable(func) else ""
 
-    ylabel = get_axes_labels(points[0], y_attr)
+    ylabel = first_point.units[y_attr]
     x_label_core = f"{yfunc.__name__} {ylabel}".strip()
 
     ax.set_xlabel(f"{func_name}({x_label_core})" if func_name else x_label_core)
@@ -371,7 +371,56 @@ def plot_learning_curve(results, volume_attr='points', result_attr='f1'):
     fig.tight_layout()
     return fig, ax
 
-def plot_grid(points, x_attr, y_attr, size_attr):
+def plot_confusion_matrix(result):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    conf_matrix = getattr(result.meta, 'conf_matrix', None)
+    labels = getattr(result.params, 'unique_labels', None)
+
+    cm = np.asarray(conf_matrix, dtype=float)
+    if labels is None or len(labels) != cm.shape[0]:
+        labels = [str(i) for i in range(cm.shape[0])]
+    else:
+        labels = [str(lbl) for lbl in labels]
+
+    fmt = ".0f"
+    im = ax.imshow(cm, interpolation='nearest', cmap='Greys')
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(np.arange(len(labels)))
+    ax.set_yticks(np.arange(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    ax.set_yticklabels(labels)
+    label_name = getattr(result.params, 'target', None) or getattr(result.params, 'target_label', None)
+    if label_name:
+        x_label = f"Predicted {label_name}"
+        y_label = f"True {label_name}"
+    else:
+        x_label = "Predicted label"
+        y_label = "True label"
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    # ax.set_title("Confusion Matrix")
+    ax.grid(False)
+    ax.grid(False, which='minor')
+
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            value = cm[i, j]
+            rgba = im.cmap(im.norm(value))
+            luminance = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
+            ax.text(
+                j, i, format(value, fmt),
+                ha='center', va='center',
+                color='white' if luminance < 0.5 else 'black'
+            )
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_grid(points, x_attr, y_attr, grid_size):
     plt.close('all')
     fig, ax = plt.subplots()
 
@@ -380,7 +429,6 @@ def plot_grid(points, x_attr, y_attr, size_attr):
 
     cells = {}
 
-    grid_size = getattr(groups[0][0], size_attr)
     x_max = grid_size[0]
     y_max = grid_size[1]
 
