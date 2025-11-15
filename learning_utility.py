@@ -49,6 +49,106 @@ def prepare_groups(points, group):
         else None
     )
 
+def build_feature_matrix(points, y_attr):
+    if not points:
+        raise ValueError("points cannot be empty when building feature matrix.")
+
+    if isinstance(y_attr, str):
+        attrs = [y_attr]
+    elif isinstance(y_attr, (list, tuple)):
+        if not y_attr:
+            raise ValueError("y_attr list must contain at least one attribute.")
+        attrs = list(y_attr)
+    else:
+        raise TypeError("y_attr must be a string or a list/tuple of strings.")
+
+    feature_blocks = []
+    matrices = []
+    start = 0
+    for attr in attrs:
+        first = np.asarray(getattr(points[0], attr), dtype=float).ravel()
+        length = first.size
+        block = np.empty((len(points), length), dtype=float)
+        block[0] = first
+        for idx, point in enumerate(points[1:], start=1):
+            values = np.asarray(getattr(point, attr), dtype=float).ravel()
+            if values.size != length:
+                raise ValueError(f"Attribute '{attr}' does not have consistent length across points.")
+            block[idx] = values
+
+        matrices.append(block)
+        feature_blocks.append({"attr": attr, "start": start, "stop": start + length, "length": length})
+        start += length
+
+    X = np.hstack(matrices) if len(matrices) > 1 else matrices[0]
+    return X, tuple(attrs), tuple(feature_blocks)
+
+def normalize_feature_importances(importances, total_features):
+    if importances is None or total_features == 0:
+        return None
+
+    arr = np.asarray(importances, dtype=float).ravel()
+    if arr.size == total_features:
+        return arr
+
+    if arr.size % total_features == 0:
+        reshaped = arr.reshape(-1, total_features)
+        return reshaped.mean(axis=0)
+
+    return None
+
+def feature_importances_by_attr(importances, feature_blocks):
+    if importances is None or not feature_blocks:
+        return None
+
+    arr = np.asarray(importances, dtype=float).ravel()
+    importance_map = {}
+    for block in feature_blocks:
+        attr = block.get("attr")
+        start = block.get("start")
+        stop = block.get("stop")
+        if attr is None or start is None or stop is None:
+            continue
+        importance_map[attr] = arr[start:stop]
+
+    return importance_map if importance_map else None
+
+def flatten_feature_importances(feature_importances, feature_blocks=None):
+    if feature_importances is None:
+        return None
+
+    if isinstance(feature_importances, np.ndarray):
+        return np.asarray(feature_importances, dtype=float).ravel()
+
+    if isinstance(feature_importances, (list, tuple)):
+        arr = np.asarray(feature_importances, dtype=float)
+        return arr.ravel()
+
+    if isinstance(feature_importances, dict):
+        order = None
+        if feature_blocks:
+            order = [block.get("attr") for block in feature_blocks if block.get("attr") is not None]
+        chunks = []
+        seen = set()
+
+        def _append_for_attr(attr):
+            if attr in seen:
+                return
+            if attr in feature_importances:
+                chunks.append(np.asarray(feature_importances[attr], dtype=float).ravel())
+                seen.add(attr)
+
+        if order:
+            for attr in order:
+                _append_for_attr(attr)
+        for attr in feature_importances.keys():
+            _append_for_attr(attr)
+
+        if chunks:
+            return np.concatenate(chunks, axis=0)
+
+    return None
+
 def build_name(point_type, label, group, classifier, attr_same, val_same):
     suffix = f"-{attr_same}={val_same}" if attr_same is not None and val_same is not None else ""
     return f"{point_type}-{label}{('-' + group) if group is not None else ''}-{classifier}{suffix}"
@@ -434,12 +534,23 @@ def combine_results(results):
             axis=0
         ) if any(getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta for r in results) else None
 
-    feat_imps = [np.asarray(getattr(r.meta,"feature_importances")) for r in results
-                 if getattr(r.meta,"feature_importances",None) is not None]
+    feat_imps = []
+    for r in results:
+        blocks = getattr(r.meta, "feature_blocks", None)
+        fi_vec = getattr(r.meta, "feature_importances_vector", None)
+        if fi_vec is None:
+            legacy = getattr(r.meta, "feature_importances", None)
+            fi_vec = flatten_feature_importances(legacy, blocks)
+        if fi_vec is not None:
+            feat_imps.append(np.asarray(fi_vec, dtype=float))
+
     if feat_imps and len({fi.shape for fi in feat_imps}) == 1:
         combined_feat_imp = np.mean(feat_imps, axis=0)
     else:
         combined_feat_imp = None
+
+    feature_blocks = getattr(first.meta, "feature_blocks", None)
+    combined_feat_map = feature_importances_by_attr(combined_feat_imp, feature_blocks)
 
     combined_params = {
         **vars(first.params),
@@ -453,7 +564,9 @@ def combine_results(results):
         "y_score":  np.concatenate(y_scores, axis=0) if y_scores else None,
         "y_pred":   np.concatenate(y_preds,  axis=0) if y_preds  else None,
         "residuals":np.concatenate(residuals,axis=0) if residuals else None,
-        "feature_importances": combined_feat_imp,
+        "feature_importances": combined_feat_map,
+        "feature_importances_vector": combined_feat_imp,
+        "feature_blocks": feature_blocks,
         "test_index": np.concatenate(test_idx, axis=0) if test_idx else None,
         "test_meta": merged_test_meta or None,
         "model": None,

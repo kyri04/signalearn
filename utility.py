@@ -341,3 +341,7 @@ def normalise_int_attr(points, attr):
             continue
 
         setattr(p, attr, scalar)
+
+def add_attr(points, attr, value):
+    for point in points:
+        setattr(point, attr, value)
