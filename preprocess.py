@@ -12,77 +12,10 @@ from sklearn.preprocessing import StandardScaler
 from numpy import trapz
 
 def sample(points, f=0.05):
-    
     sample_size = int(len(points) * f)
     sampled_points = random.sample(points, sample_size)
     
     return sampled_points
-
-def trim(points, x_attr, y_attr, percent=0.05, front=True, back=True, threshold=1e-8):
-
-    starts, ends = [], []
-    for point in points:
-        y = getattr(point, y_attr)
-        nonzero = np.where(y > threshold)[0]
-        if nonzero.size > 0:
-            starts.append(nonzero[0])
-            ends.append(nonzero[-1] + 1)
-    if not starts or not ends:
-        return points
-
-    global_start = max(starts)
-    global_end   = min(ends)
-    usable_len = global_end - global_start
-
-    cut = int(usable_len * percent)
-    start = global_start + cut if front else global_start
-    end   = global_end - cut if back else global_end
-
-    if end <= start:
-        start, end = global_start, global_end
-
-    sl = slice(start, end)
-
-    trimmed = []
-    for point in points:
-        new_params = point.__dict__.copy()
-        new_params["x"] = getattr(point, x_attr)[sl]
-        new_params["y"] = getattr(point, y_attr)[sl]
-        trimmed.append(point.__class__(new_params))
-
-    return trimmed
-
-def trim(points, x_attr, y_attr, num=3, front=True, back=True, threshold=1e-8):
-
-    starts, ends = [], []
-    for point in points:
-        y = getattr(point, y_attr)
-        nonzero = np.where(y > threshold)[0]
-        if nonzero.size > 0:
-            starts.append(nonzero[0])
-            ends.append(nonzero[-1] + 1)
-    if not starts or not ends:
-        return points
-
-    global_start = max(starts)
-    global_end   = min(ends)
-
-    start = global_start + num if front else global_start
-    end   = global_end - num if back else global_end
-
-    if end <= start:
-        start, end = global_start, global_end
-
-    sl = slice(start, end)
-
-    trimmed = []
-    for point in points:
-        new_params = point.__dict__.copy()
-        new_params[x_attr] = getattr(point, x_attr)[sl]
-        new_params[y_attr] = getattr(point, y_attr)[sl]
-        trimmed.append(point.__class__(new_params))
-
-    return trimmed
 
 def interpolate(points, x_attr, y_attr, n=50):
 
@@ -107,70 +40,155 @@ def interpolate(points, x_attr, y_attr, n=50):
 
     return interpolated_points
 
-def resample(points, x_attr, rate):
-    out = []
-    dt = 1.0 / float(rate)
+def trim(points, x_attr, amount, mode='both'):
+    mode = mode.lower()
 
-    for p in points:
-        t_raw = np.asarray(getattr(p, x_attr), float)
-        if t_raw.ndim != 1 or t_raw.size < 2:
+    for point in points:
+        x_raw = getattr(point, x_attr, None)
+        x = np.asarray(x_raw, dtype=float)
+
+        orig_len = x.shape[0]
+
+        left = x[0]
+        right = x[-1]
+        if mode in {'front', 'both'}:
+            left += amount
+        if mode in {'back', 'both'}:
+            right -= amount
+
+        mask = (x >= left) & (x <= right)
+
+        attrs_to_trim = []
+        for name, value in point.__dict__.items():
+            arr = np.asarray(value)
+            if arr.ndim >= 1 and arr.shape[0] == orig_len:
+                attrs_to_trim.append((name, arr))
+
+        setattr(point, x_attr, x[mask])
+        for name, arr in attrs_to_trim:
+            setattr(point, name, arr[mask])
+
+    return points
+
+def resample(points, x_axis, rate):
+    rate = float(rate)
+    step = 1.0 / rate
+    eps = np.finfo(float).eps
+
+    for point in points:
+        if not hasattr(point, x_axis):
             continue
 
-        N = t_raw.shape[0]
-        chan_names = []
-        for k, v in p.__dict__.items():
-            if k == x_attr:
+        x_raw = getattr(point, x_axis)
+        x_arr = np.asarray(x_raw, dtype=float).ravel()
+
+        orig_len = x_arr.shape[0]
+        mask = np.isfinite(x_arr)
+        idx = np.flatnonzero(mask)
+
+        x_valid = x_arr[idx]
+        order = np.argsort(x_valid)
+        idx = idx[order]
+        x_valid = x_valid[order]
+
+        if x_valid.size > 1:
+            dup = np.concatenate(([True], np.diff(x_valid) > eps))
+            if not np.all(dup):
+                idx = idx[dup]
+                x_valid = x_valid[dup]
+
+        span = x_valid[-1] - x_valid[0]
+
+        n_samples = max(2, int(np.floor(span * rate)) + 1)
+        new_x = x_valid[0] + np.arange(n_samples) * step
+        if new_x[-1] < x_valid[-1] - eps:
+            new_x = np.append(new_x, x_valid[-1])
+
+        updates = {}
+        for attr, value in list(point.__dict__.items()):
+            if attr == x_axis:
                 continue
-            if is_numeric_array(v) and np.asarray(v).shape[0] == N:
-                chan_names.append(k)
-        if not chan_names:
-            continue
 
-        t_mask = np.isfinite(t_raw)
-        t = t_raw[t_mask]
-        if t.size < 2:
-            continue
-        sidx = np.argsort(t)
-        t = t[sidx]
-        idx_chain = np.nonzero(t_mask)[0][sidx]
-        t_unique, keep = np.unique(t, return_index=True)
-        if t_unique.size < 2:
-            continue
+            arr = np.asarray(value)
+            if arr.ndim == 0 or arr.shape[0] != orig_len:
+                continue
 
-        t_uniform = np.arange(t_unique[0], t_unique[-1], dt)
-        if t_uniform.size < 2:
-            t_uniform = np.linspace(t_unique[0], t_unique[-1], 2)
+            try:
+                arr_numeric = np.asarray(value, dtype=float)
+            except (TypeError, ValueError):
+                continue
 
-        resampled = {}
-        for name in chan_names:
-            v_raw = np.asarray(getattr(p, name))
-            v = v_raw[idx_chain]
-            v = v[keep]
+            arr_valid = arr_numeric[idx]
+            interp_func = interp1d(
+                x_valid,
+                arr_valid,
+                axis=0,
+                kind='linear',
+                bounds_error=False,
+                fill_value="extrapolate"
+            )
+            updates[attr] = interp_func(new_x)
 
-            if v.ndim == 1:
-                v = v.astype(float, copy=False)
-                v_mask = np.isfinite(v)
-                if np.count_nonzero(v_mask) < 2:
-                    resampled[name] = getattr(p, name)
-                    continue
-                f = interp1d(t_unique[v_mask], v[v_mask], bounds_error=False, fill_value="extrapolate", assume_sorted=True)
-                resampled[name] = f(t_uniform)
-            else:
-                v = v.astype(float, copy=False)
-                row_finite = np.all(np.isfinite(v), axis=tuple(range(1, v.ndim)))
-                if np.count_nonzero(row_finite) < 2:
-                    resampled[name] = getattr(p, name)
-                    continue
-                f = interp1d(t_unique[row_finite], v[row_finite, ...], axis=0, bounds_error=False, fill_value="extrapolate", assume_sorted=True)
-                resampled[name] = f(t_uniform)
+        setattr(point, x_axis, new_x)
+        for attr, values in updates.items():
+            setattr(point, attr, values)
 
-        params = p.__dict__.copy()
-        params[x_attr] = t_uniform
-        for name, arr in resampled.items():
-            params[name] = arr
-        out.append(p.__class__(**params))
+    return points
 
-    return out
+def window(points, x_attr, duration, overlap=0.0, allow_partial=False):
+    windows = []
+    for p_idx, point in enumerate(points):
+
+        x_raw = getattr(point, x_attr)
+        x = np.asarray(x_raw, dtype=float).ravel()
+        n = x.size
+
+        dx = np.diff(x)
+        dx = dx[np.isfinite(dx) & (dx > 0)]
+
+        dt = float(np.median(dx))
+
+        window_samples = max(1, int(round(duration / dt)))
+        if window_samples <= 1:
+            window_samples = 2
+
+        step = max(1, int(round(window_samples * (1 - overlap))))
+        if step <= 0:
+            step = 1
+
+        start = 0
+        window_idx = 0
+        while start < n:
+            end = start + window_samples
+            if end > n:
+                if not allow_partial:
+                    break
+                end = n
+
+            if end - start <= 1:
+                break
+
+            new_params = {}
+            for attr, value in point.__dict__.items():
+                arr = np.asarray(value)
+                if arr.ndim >= 1 and arr.shape[0] == n:
+                    try:
+                        sliced = value[start:end]
+                    except Exception:
+                        sliced = arr[start:end]
+                    new_params[attr] = sliced
+                else:
+                    new_params[attr] = value
+
+            parent_id = getattr(point, "name", None)
+            new_params["window_index"] = window_idx
+            new_params["name"] = f"{parent_id}_w{window_idx}"
+            windows.append(point.__class__(new_params))
+
+            window_idx += 1
+            start += step
+
+    return windows
 
 def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
     if not points:

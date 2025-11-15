@@ -153,6 +153,7 @@ def plot_point(point, x_attr, y_attr, func=None):
 
     ax.plot(X, Y_plot, lw=1)
 
+    ax.ticklabel_format(axis='x', useOffset=False)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
