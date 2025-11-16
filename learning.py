@@ -15,7 +15,7 @@ def classify(
     test_size=0.2,
     split_state=42
 ):
-
+    
     N = len(points)
 
     X_full, feature_attrs, feature_blocks = build_feature_matrix(points, y_attr)
@@ -60,7 +60,8 @@ def classify(
     feature_importances = feature_importances_by_attr(feature_importance_vector, feature_blocks)
 
     pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
-    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+    # test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+    test_meta = {a: [getattr(points[i], a) for i in test_idx] for a in pt0_attrs}
 
     y_attr_param = list(feature_attrs) if len(feature_attrs) > 1 else feature_attrs[0]
 

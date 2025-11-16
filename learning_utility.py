@@ -526,13 +526,24 @@ def combine_results(results):
     keys = set()
     for r in results:
         tm = getattr(r.meta, "test_meta", None)
-        if isinstance(tm, dict): keys.update(tm.keys())
+        if isinstance(tm, dict):
+            keys.update(tm.keys())
     for k in keys:
-        merged_test_meta[k] = np.concatenate(
-            [np.asarray(r.meta.test_meta[k]) for r in results
-             if getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta],
-            axis=0
-        ) if any(getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta for r in results) else None
+        vals = [
+            np.asarray(r.meta.test_meta[k], dtype=object)
+            for r in results
+            if getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta
+        ]
+        if not vals:
+            merged_test_meta[k] = None
+            continue
+        try:
+            merged_test_meta[k] = np.concatenate(vals, axis=0)
+        except ValueError:
+            merged = []
+            for v in vals:
+                merged.extend(np.asarray(v, dtype=object).ravel())
+            merged_test_meta[k] = np.asarray(merged, dtype=object)
 
     feat_imps = []
     for r in results:
@@ -785,3 +796,29 @@ def combine_ordinal_results(results, cutoff=0.5):
         set_results=set_results,
         set_meta=set_meta
     )
+
+def check_split_feasible(points, target, group, test_size):
+    if group is None:
+        return
+
+    group_classes = {}
+    class_groups = {}
+    for p in points:
+        g = getattr(p, group, None)
+        c = getattr(p, target, None)
+        if g is None or c is None:
+            continue
+        group_classes.setdefault(g, set()).add(c)
+        class_groups.setdefault(c, set()).add(g)
+
+    total_groups = len(group_classes)
+    if total_groups == 0:
+        return
+
+    max_test_groups = max(1, int(np.ceil(total_groups * test_size)))
+    for cls, gset in class_groups.items():
+        if len(gset) <= max_test_groups:
+            raise ValueError(
+                f"Class '{cls}' appears in only {len(gset)} group(s). Reduce test_size "
+                "or collect more mixed groups."
+            )
