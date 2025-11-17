@@ -3,6 +3,7 @@ from signalearn.learning import *
 from signalearn.learning_utility import combine_results, calculate_metrics
 from sklearn.metrics import confusion_matrix
 import numpy as np
+from sklearn.base import clone
 
 def ordinal_classify(
     points,
@@ -37,7 +38,7 @@ def ordinal_classify(
             y_attr=y_attr,
             target=ord_attr,
             group=group,
-            model=model,
+            model=clone(model),
             test_size=test_size,
             split_state=split_state,
             scaler=scaler,
@@ -68,7 +69,7 @@ def shuffle_learn(
             y_attr=y_attr,
             target = target, 
             group = group,
-            model = model, 
+            model = clone(model), 
             test_size = test_size,  
             split_state = rs,
             scaler=scaler,
@@ -120,7 +121,7 @@ def attr_curve(
                 target=target,
                 learn_func=learn_func,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scaler=scaler,
@@ -135,7 +136,7 @@ def attr_curve(
                 y_attr=y_attr,
                 target=target,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 split_state=split_state,
                 scaler=scaler,
@@ -174,7 +175,7 @@ def data_curve(
                 target=target,
                 learn_func=learn_func,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scaler=scaler,
@@ -190,7 +191,7 @@ def data_curve(
                 y_attr=y_attr,
                 target=target,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 split_state=split_state,
                 scaler=scaler,
