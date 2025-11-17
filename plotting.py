@@ -17,8 +17,7 @@ def _format_callable_name(func):
 
 def save_plot(plot, filename, dpi=300, extension='pdf'):
     fig = plot[0]
-    os.makedirs('plots/export', exist_ok=True)
-    fig.savefig(f"plots/{filename}.{extension}", bbox_inches='tight', dpi=dpi)
+    fig.savefig(f"{filename}.{extension}", bbox_inches='tight', dpi=dpi)
 
 def _select_feature_importances(res, feature_attr):
     feature_map = getattr(res.meta, "feature_importances", None)

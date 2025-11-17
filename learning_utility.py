@@ -7,7 +7,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 from sklearn.tree import DecisionTreeRegressor
@@ -589,6 +589,72 @@ def combine_results(results):
         set_meta = combined_meta
     )
     return combined
+
+def best_and_worst_results(results):
+    auc_ranked = []
+    for res in results:
+        y_true = getattr(res.meta, "y_true", None)
+        y_score = getattr(res.meta, "y_score", None)
+        if y_true is None or y_score is None:
+            continue
+        y_true_arr = np.asarray(y_true)
+        y_score_arr = np.asarray(y_score)
+        if y_true_arr.size == 0 or y_score_arr.size == 0:
+            continue
+        try:
+            auc = float(roc_auc_score(y_true_arr, y_score_arr))
+        except ValueError:
+            continue
+        if np.isnan(auc):
+            continue
+        auc_ranked.append((auc, res))
+
+    if auc_ranked:
+        auc_ranked.sort(key=lambda x: x[0])
+        best_res = auc_ranked[-1][1]
+        worst_res = auc_ranked[0][1]
+        return best_res, worst_res
+
+    metric_priority = [
+        ("f1", True),
+        ("accuracy", True),
+        ("precision", True),
+        ("recall", True),
+        ("specificity", True),
+        ("sensitivity", True),
+        ("r2", True),
+        ("mae", False),
+        ("rmse", False),
+        ("mse", False),
+    ]
+
+    for metric, higher_is_better in metric_priority:
+        scored = []
+        for res in results:
+            value = getattr(res.results, metric, None)
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if not np.isfinite(value):
+                continue
+            scored.append((value, res))
+
+        if not scored:
+            continue
+
+        scored.sort(key=lambda x: x[0])
+        if higher_is_better:
+            best_res = scored[-1][1]
+            worst_res = scored[0][1]
+        else:
+            best_res = scored[0][1]
+            worst_res = scored[-1][1]
+        return best_res, worst_res
+
+    raise ValueError("Unable to determine best and worst results from provided list.")
 
 def aggregate_result(
     res,
