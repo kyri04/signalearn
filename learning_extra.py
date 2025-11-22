@@ -3,6 +3,7 @@ from signalearn.learning import *
 from signalearn.learning_utility import combine_results, calculate_metrics
 from sklearn.metrics import confusion_matrix
 import numpy as np
+from sklearn.base import clone
 
 def ordinal_classify(
     points,
@@ -15,6 +16,7 @@ def ordinal_classify(
     scaler=None,
     sampler=None
 ):
+    check_split_feasible(points, target, group, test_size)
     classes = sorted(find_unique(points, target))
     thresholds = classes[1:]
     results = {}
@@ -36,7 +38,7 @@ def ordinal_classify(
             y_attr=y_attr,
             target=ord_attr,
             group=group,
-            model=model,
+            model=clone(model),
             test_size=test_size,
             split_state=split_state,
             scaler=scaler,
@@ -59,6 +61,7 @@ def shuffle_learn(
     scaler=None,
     sampler=None
 ):
+    check_split_feasible(points, target, group, test_size)
     results = []
     for rs in range(shuffles):
         results.append(learn_func(
@@ -66,7 +69,7 @@ def shuffle_learn(
             y_attr=y_attr,
             target = target, 
             group = group,
-            model = model, 
+            model = clone(model), 
             test_size = test_size,  
             split_state = rs,
             scaler=scaler,
@@ -91,7 +94,7 @@ def attr_curve(
     scaler=None,
     sampler=None
 ):
-
+    check_split_feasible(points, target, group, test_size)
     rng = np.random.default_rng(split_state)
 
     values = np.array([getattr(p, by_attribute) for p in points])
@@ -113,18 +116,19 @@ def attr_curve(
 
         if (shuffles_per_split is not None) and (shuffles_per_split > 1):
             res_list = shuffle_learn(
-                subset=subset,
+                points=subset,
                 y_attr=y_attr,
                 target=target,
                 learn_func=learn_func,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scaler=scaler,
                 sampler=sampler
             )
-            results.append(combine_results(res_list))
+            if res_list:
+                results.append(combine_results(res_list))
             
         else:
             res = learn_func(
@@ -132,7 +136,7 @@ def attr_curve(
                 y_attr=y_attr,
                 target=target,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 split_state=split_state,
                 scaler=scaler,
@@ -157,7 +161,7 @@ def data_curve(
     scaler=None,
     sampler=None
 ):
-
+    check_split_feasible(points, target, group, test_size)
     fractions = np.linspace(start_fraction, 1.0, divisions)
     results = []
 
@@ -171,14 +175,15 @@ def data_curve(
                 target=target,
                 learn_func=learn_func,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 shuffles=shuffles_per_split,
                 scaler=scaler,
                 sampler=sampler
             )
-            res = combine_results(res_list)
-            results.append(res)
+            if res_list:
+                res = combine_results(res_list)
+                results.append(res)
             
         else:
             res = learn_func(
@@ -186,7 +191,7 @@ def data_curve(
                 y_attr=y_attr,
                 target=target,
                 group=group,
-                model=model,
+                model=clone(model),
                 test_size=test_size,
                 split_state=split_state,
                 scaler=scaler,

@@ -46,6 +46,31 @@ def get_axes_labels(point, *attrs):
         labels.append(lbl)
     return labels
 
+def get_sample_rate(points, x_attr):
+    def _rate(point):
+        x = getattr(point, x_attr, None)
+        if x is None:
+            return None
+
+        try:
+            arr = np.asarray(x, dtype=float)
+        except Exception:
+            return None
+
+        if arr.ndim == 0 or arr.size < 2:
+            return None
+
+        diffs = np.diff(arr)
+        diffs = diffs[np.isfinite(diffs) & (diffs > 0)]
+        if diffs.size == 0:
+            return None
+
+        return float(1.0 / np.median(diffs))
+
+    if isinstance(points, (list, tuple, set)):
+        return [_rate(p) for p in points]
+    return _rate(points)
+
 def find_same_attribute(points):
 
     common_attrs = vars(points[0]).keys()
@@ -341,3 +366,7 @@ def normalise_int_attr(points, attr):
             continue
 
         setattr(p, attr, scalar)
+
+def add_attr(points, attr, value):
+    for point in points:
+        setattr(point, attr, value)

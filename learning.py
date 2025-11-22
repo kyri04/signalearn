@@ -15,11 +15,11 @@ def classify(
     test_size=0.2,
     split_state=42
 ):
-
+    
     N = len(points)
-    
-    ys = np.array([getattr(point, y_attr) for point in points])
-    
+
+    X_full, feature_attrs, feature_blocks = build_feature_matrix(points, y_attr)
+
     labels = prepare_labels(points, target)
     groups = prepare_groups(points, group)
 
@@ -34,7 +34,7 @@ def classify(
         test_groups = set(groups[test_idx])
         assert train_groups.isdisjoint(test_groups)
 
-    X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
+    X_train_raw, X_test_raw = X_full[train_idx], X_full[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
     X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
@@ -54,10 +54,16 @@ def classify(
 
     accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall, mean_f1 = calculate_metrics(conf_matrix)
 
-    feature_importances = get_feature_importances(model)
+    raw_feature_importances = get_feature_importances(model)
+    total_features = X_full.shape[1] if X_full.ndim > 1 else 0
+    feature_importance_vector = normalize_feature_importances(raw_feature_importances, total_features)
+    feature_importances = feature_importances_by_attr(feature_importance_vector, feature_blocks)
 
     pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
-    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+    # test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+    test_meta = {a: [getattr(points[i], a) for i in test_idx] for a in pt0_attrs}
+
+    y_attr_param = list(feature_attrs) if len(feature_attrs) > 1 else feature_attrs[0]
 
     res = Result(
         set_params={
@@ -68,6 +74,7 @@ def classify(
             "split_state": split_state,
             "scaler": scaler.__class__.__name__ if scaler is not None else None,
             "sampler": sampler.__class__.__name__ if sampler is not None else None,
+            "y_attr": y_attr_param,
             "unique_labels": unique_labels,
             "mode": "normal"
         },
@@ -84,6 +91,8 @@ def classify(
             "y_true": y_test,
             "y_score": y_score,
             "feature_importances": feature_importances,
+            "feature_importances_vector": feature_importance_vector,
+            "feature_blocks": feature_blocks,
             "test_index": test_idx,
             "test_meta": test_meta
         }
@@ -103,7 +112,7 @@ def regress(
 ):
     N = len(points)
 
-    ys = np.array([getattr(point, y_attr) for point in points])
+    X_full, feature_attrs, feature_blocks = build_feature_matrix(points, y_attr)
     y = np.array([getattr(point, target) for point in points], dtype=float)
     groups = prepare_groups(points, group)
 
@@ -114,7 +123,7 @@ def regress(
         test_groups = set(groups[test_idx])
         assert train_groups.isdisjoint(test_groups)
 
-    X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
+    X_train_raw, X_test_raw = X_full[train_idx], X_full[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
     X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
@@ -133,10 +142,15 @@ def regress(
     ss_tot = np.sum((y_test - np.mean(y_test)) ** 2)
     r2 = float(1.0 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
 
-    feature_importances = get_feature_importances(model)
+    raw_feature_importances = get_feature_importances(model)
+    total_features = X_full.shape[1] if X_full.ndim > 1 else 0
+    feature_importance_vector = normalize_feature_importances(raw_feature_importances, total_features)
+    feature_importances = feature_importances_by_attr(feature_importance_vector, feature_blocks)
 
     pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
     test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+
+    y_attr_param = list(feature_attrs) if len(feature_attrs) > 1 else feature_attrs[0]
 
     res = Result(
         set_params={
@@ -147,6 +161,7 @@ def regress(
             "split_state": split_state,
             "scaler": scaler.__class__.__name__ if scaler is not None else None,
             "sampler": sampler.__class__.__name__ if sampler is not None else None,
+            "y_attr": y_attr_param,
             "mode": "normal"
         },
         set_results={
@@ -160,6 +175,8 @@ def regress(
             "y_pred": y_pred,
             "residuals": y_test - y_pred,
             "feature_importances": feature_importances,
+            "feature_importances_vector": feature_importance_vector,
+            "feature_blocks": feature_blocks,
             "test_index": test_idx,
             "test_meta": test_meta
         }

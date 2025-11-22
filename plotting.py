@@ -7,54 +7,105 @@ from sklearn.metrics import roc_curve, roc_auc_score
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
+def _format_callable_name(func):
+    if not callable(func):
+        return None
+    name = getattr(func, "__name__", None)
+    if not name or name == "<lambda>":
+        name = func.__class__.__name__
+    return name.capitalize()
+
 def save_plot(plot, filename, dpi=300, extension='pdf'):
     fig = plot[0]
-    os.makedirs('plots/export', exist_ok=True)
-    fig.savefig(f"plots/{filename}.{extension}", bbox_inches='tight', dpi=dpi)
+    fig.savefig(f"{filename}.{extension}", bbox_inches='tight', dpi=dpi)
 
-def plot_importances(result, points=None, func=None, x_attr=None, y_attr=None):
+def _select_feature_importances(res, feature_attr):
+    feature_map = getattr(res.meta, "feature_importances", None)
+    if not isinstance(feature_map, dict) or not feature_map:
+        legacy = getattr(res.results, "feature_importances", None)
+        if isinstance(legacy, dict) and legacy:
+            feature_map = legacy
+        else:
+            return None, None
+
+    if feature_attr not in feature_map:
+        raise ValueError(f"Feature attribute '{feature_attr}' not found in result importances.")
+
+    values = np.asarray(feature_map[feature_attr], dtype=float)
+    return feature_attr, values
+
+def plot_importances(
+    result,
+    points,
+    x_attr,
+    y_attr,
+    func=None,
+    yfunc=np.mean,
+):
+    if not points:
+        raise ValueError("plot_importances requires a non-empty 'points' collection.")
+    if y_attr is None:
+        raise ValueError("y_attr must be provided to match feature importances.")
+
     plt.close('all')
     fig, ax = plt.subplots()
     xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
+    identity = (lambda x: x)
+    transform = func if callable(func) else identity
+
     if isinstance(result, list):
         importances = []
         first = None
         for r in result:
-            fi = getattr(r.results, "feature_importances", None)
+            _, fi = _select_feature_importances(r, y_attr)
             if fi is not None:
                 importances.append(np.asarray(fi, dtype=float))
                 if first is None:
                     first = r
 
-        imp = np.mean(importances, axis=0)
+        if not importances or first is None:
+            raise ValueError("No feature importances available for plotting.")
 
-        x_imp = np.asarray(getattr(first.params.mean_point, x_attr), dtype=float)
+        imp = np.mean(importances, axis=0)
+        first_res = first
+        if x_attr is None:
+            raise ValueError("x_attr must be provided when plotting averaged results.")
+        x_imp = np.asarray(getattr(first_res.params.mean_point, x_attr), dtype=float)
     else:
-        fi = getattr(result.results, "feature_importances", None)
+        _, fi = _select_feature_importances(result, y_attr)
+        if fi is None:
+            raise ValueError("No feature importances available for plotting.")
         imp = np.asarray(fi, dtype=float)
 
-        x_imp = np.asarray(getattr(points[0], x_attr), dtype=float)
+        if x_attr is None:
+            x_imp = np.asarray(getattr(points[0], y_attr), dtype=float)
+        else:
+            x_imp = np.asarray(getattr(points[0], x_attr), dtype=float)
 
     ax.plot(x_imp, imp, label="Feature importances")
 
     if points:
         Ys = []
         for p in points:
-            Ys.append(func(getattr(p, y_attr)))
+            Ys.append(transform(getattr(p, y_attr)))
 
         Y = np.vstack(Ys)
-        med = np.median(Y, axis=0)
+        try:
+            ref_curve = yfunc(Y, axis=0)
+        except TypeError:
+            ref_curve = yfunc(Y)
 
         imp_min, imp_max = float(np.min(imp)), float(np.max(imp))
-        med_min, med_max = float(np.min(med)), float(np.max(med))
+        med_min, med_max = float(np.min(ref_curve)), float(np.max(ref_curve))
         if med_max > med_min:
             scale = (imp_max - imp_min) / (med_max - med_min) if imp_max > imp_min else 1.0
             offset = imp_min - scale * med_min
-            med_scaled = scale * med + offset
+            med_scaled = scale * ref_curve + offset
         else:
-            med_scaled = np.full_like(med, imp_min)
+            med_scaled = np.full_like(ref_curve, imp_min)
 
-        lbl = f"Median {ylabel}" if func is None else f"Median {func.__name__}({ylabel})"
+        func_name = _format_callable_name(yfunc) or "Function"
+        lbl = f"{func_name} {ylabel}"
         ax.plot(x_imp, med_scaled, linestyle=":", color="0", label=lbl)
 
     ax.set_yticks([])
@@ -178,7 +229,8 @@ def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75)):
     ax.set_yticks([])
     ax.set_xlabel(xlabel)
 
-    ylabel = ylabel if func is None else f'{func.__name__} {ylabel}'
+    func_label = _format_callable_name(func)
+    ylabel = ylabel if func_label is None else f'{func_label} {ylabel}'
     ax.set_ylabel(ylabel)
 
     ax.legend()
@@ -216,7 +268,8 @@ def plot_points(points, x_attr, y_attr, func=None, offset=0.1):
 
     xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
 
-    ylabel = ylabel if func is None else f"{func.__name__} {ylabel}"
+    func_label = _format_callable_name(func)
+    ylabel = ylabel if func_label is None else f"{func_label} {ylabel}"
     ax.set_ylabel(ylabel)
 
     ax.set_xlabel(xlabel)
@@ -293,10 +346,11 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
         ax.hist(gv, bins=bins, histtype="step", linewidth=1.8, label=f"Group {i}")
 
     first_point = groups[0][0] if groups and groups[0] else None
-    func_name = func.__name__ if callable(func) else ""
+    func_name = _format_callable_name(func) or ""
 
     ylabel = first_point.units[y_attr]
-    x_label_core = f"{yfunc.__name__} {ylabel}".strip()
+    yfunc_label = _format_callable_name(yfunc)
+    x_label_core = f"{(yfunc_label or '').strip()} {ylabel}".strip()
 
     ax.set_xlabel(f"{func_name}({x_label_core})" if func_name else x_label_core)
     ax.set_ylabel("Frequency")

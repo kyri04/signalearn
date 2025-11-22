@@ -7,7 +7,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 from sklearn.tree import DecisionTreeRegressor
@@ -48,6 +48,106 @@ def prepare_groups(points, group):
         if group is not None
         else None
     )
+
+def build_feature_matrix(points, y_attr):
+    if not points:
+        raise ValueError("points cannot be empty when building feature matrix.")
+
+    if isinstance(y_attr, str):
+        attrs = [y_attr]
+    elif isinstance(y_attr, (list, tuple)):
+        if not y_attr:
+            raise ValueError("y_attr list must contain at least one attribute.")
+        attrs = list(y_attr)
+    else:
+        raise TypeError("y_attr must be a string or a list/tuple of strings.")
+
+    feature_blocks = []
+    matrices = []
+    start = 0
+    for attr in attrs:
+        first = np.asarray(getattr(points[0], attr), dtype=float).ravel()
+        length = first.size
+        block = np.empty((len(points), length), dtype=float)
+        block[0] = first
+        for idx, point in enumerate(points[1:], start=1):
+            values = np.asarray(getattr(point, attr), dtype=float).ravel()
+            if values.size != length:
+                raise ValueError(f"Attribute '{attr}' does not have consistent length across points.")
+            block[idx] = values
+
+        matrices.append(block)
+        feature_blocks.append({"attr": attr, "start": start, "stop": start + length, "length": length})
+        start += length
+
+    X = np.hstack(matrices) if len(matrices) > 1 else matrices[0]
+    return X, tuple(attrs), tuple(feature_blocks)
+
+def normalize_feature_importances(importances, total_features):
+    if importances is None or total_features == 0:
+        return None
+
+    arr = np.asarray(importances, dtype=float).ravel()
+    if arr.size == total_features:
+        return arr
+
+    if arr.size % total_features == 0:
+        reshaped = arr.reshape(-1, total_features)
+        return reshaped.mean(axis=0)
+
+    return None
+
+def feature_importances_by_attr(importances, feature_blocks):
+    if importances is None or not feature_blocks:
+        return None
+
+    arr = np.asarray(importances, dtype=float).ravel()
+    importance_map = {}
+    for block in feature_blocks:
+        attr = block.get("attr")
+        start = block.get("start")
+        stop = block.get("stop")
+        if attr is None or start is None or stop is None:
+            continue
+        importance_map[attr] = arr[start:stop]
+
+    return importance_map if importance_map else None
+
+def flatten_feature_importances(feature_importances, feature_blocks=None):
+    if feature_importances is None:
+        return None
+
+    if isinstance(feature_importances, np.ndarray):
+        return np.asarray(feature_importances, dtype=float).ravel()
+
+    if isinstance(feature_importances, (list, tuple)):
+        arr = np.asarray(feature_importances, dtype=float)
+        return arr.ravel()
+
+    if isinstance(feature_importances, dict):
+        order = None
+        if feature_blocks:
+            order = [block.get("attr") for block in feature_blocks if block.get("attr") is not None]
+        chunks = []
+        seen = set()
+
+        def _append_for_attr(attr):
+            if attr in seen:
+                return
+            if attr in feature_importances:
+                chunks.append(np.asarray(feature_importances[attr], dtype=float).ravel())
+                seen.add(attr)
+
+        if order:
+            for attr in order:
+                _append_for_attr(attr)
+        for attr in feature_importances.keys():
+            _append_for_attr(attr)
+
+        if chunks:
+            return np.concatenate(chunks, axis=0)
+
+    return None
 
 def build_name(point_type, label, group, classifier, attr_same, val_same):
     suffix = f"-{attr_same}={val_same}" if attr_same is not None and val_same is not None else ""
@@ -426,20 +526,42 @@ def combine_results(results):
     keys = set()
     for r in results:
         tm = getattr(r.meta, "test_meta", None)
-        if isinstance(tm, dict): keys.update(tm.keys())
+        if isinstance(tm, dict):
+            keys.update(tm.keys())
     for k in keys:
-        merged_test_meta[k] = np.concatenate(
-            [np.asarray(r.meta.test_meta[k]) for r in results
-             if getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta],
-            axis=0
-        ) if any(getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta for r in results) else None
+        vals = [
+            np.asarray(r.meta.test_meta[k], dtype=object)
+            for r in results
+            if getattr(r.meta, "test_meta", None) is not None and k in r.meta.test_meta
+        ]
+        if not vals:
+            merged_test_meta[k] = None
+            continue
+        try:
+            merged_test_meta[k] = np.concatenate(vals, axis=0)
+        except ValueError:
+            merged = []
+            for v in vals:
+                merged.extend(np.asarray(v, dtype=object).ravel())
+            merged_test_meta[k] = np.asarray(merged, dtype=object)
 
-    feat_imps = [np.asarray(getattr(r.meta,"feature_importances")) for r in results
-                 if getattr(r.meta,"feature_importances",None) is not None]
+    feat_imps = []
+    for r in results:
+        blocks = getattr(r.meta, "feature_blocks", None)
+        fi_vec = getattr(r.meta, "feature_importances_vector", None)
+        if fi_vec is None:
+            legacy = getattr(r.meta, "feature_importances", None)
+            fi_vec = flatten_feature_importances(legacy, blocks)
+        if fi_vec is not None:
+            feat_imps.append(np.asarray(fi_vec, dtype=float))
+
     if feat_imps and len({fi.shape for fi in feat_imps}) == 1:
         combined_feat_imp = np.mean(feat_imps, axis=0)
     else:
         combined_feat_imp = None
+
+    feature_blocks = getattr(first.meta, "feature_blocks", None)
+    combined_feat_map = feature_importances_by_attr(combined_feat_imp, feature_blocks)
 
     combined_params = {
         **vars(first.params),
@@ -453,7 +575,9 @@ def combine_results(results):
         "y_score":  np.concatenate(y_scores, axis=0) if y_scores else None,
         "y_pred":   np.concatenate(y_preds,  axis=0) if y_preds  else None,
         "residuals":np.concatenate(residuals,axis=0) if residuals else None,
-        "feature_importances": combined_feat_imp,
+        "feature_importances": combined_feat_map,
+        "feature_importances_vector": combined_feat_imp,
+        "feature_blocks": feature_blocks,
         "test_index": np.concatenate(test_idx, axis=0) if test_idx else None,
         "test_meta": merged_test_meta or None,
         "model": None,
@@ -465,6 +589,72 @@ def combine_results(results):
         set_meta = combined_meta
     )
     return combined
+
+def best_and_worst_results(results):
+    auc_ranked = []
+    for res in results:
+        y_true = getattr(res.meta, "y_true", None)
+        y_score = getattr(res.meta, "y_score", None)
+        if y_true is None or y_score is None:
+            continue
+        y_true_arr = np.asarray(y_true)
+        y_score_arr = np.asarray(y_score)
+        if y_true_arr.size == 0 or y_score_arr.size == 0:
+            continue
+        try:
+            auc = float(roc_auc_score(y_true_arr, y_score_arr))
+        except ValueError:
+            continue
+        if np.isnan(auc):
+            continue
+        auc_ranked.append((auc, res))
+
+    if auc_ranked:
+        auc_ranked.sort(key=lambda x: x[0])
+        best_res = auc_ranked[-1][1]
+        worst_res = auc_ranked[0][1]
+        return best_res, worst_res
+
+    metric_priority = [
+        ("f1", True),
+        ("accuracy", True),
+        ("precision", True),
+        ("recall", True),
+        ("specificity", True),
+        ("sensitivity", True),
+        ("r2", True),
+        ("mae", False),
+        ("rmse", False),
+        ("mse", False),
+    ]
+
+    for metric, higher_is_better in metric_priority:
+        scored = []
+        for res in results:
+            value = getattr(res.results, metric, None)
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if not np.isfinite(value):
+                continue
+            scored.append((value, res))
+
+        if not scored:
+            continue
+
+        scored.sort(key=lambda x: x[0])
+        if higher_is_better:
+            best_res = scored[-1][1]
+            worst_res = scored[0][1]
+        else:
+            best_res = scored[0][1]
+            worst_res = scored[-1][1]
+        return best_res, worst_res
+
+    raise ValueError("Unable to determine best and worst results from provided list.")
 
 def aggregate_result(
     res,
@@ -672,3 +862,30 @@ def combine_ordinal_results(results, cutoff=0.5):
         set_results=set_results,
         set_meta=set_meta
     )
+
+def check_split_feasible(points, target, group, test_size):
+    return
+    if group is None:
+        return
+
+    group_classes = {}
+    class_groups = {}
+    for p in points:
+        g = getattr(p, group, None)
+        c = getattr(p, target, None)
+        if g is None or c is None:
+            continue
+        group_classes.setdefault(g, set()).add(c)
+        class_groups.setdefault(c, set()).add(g)
+
+    total_groups = len(group_classes)
+    if total_groups == 0:
+        return
+
+    max_test_groups = max(1, int(np.ceil(total_groups * test_size)))
+    for cls, gset in class_groups.items():
+        if len(gset) <= max_test_groups:
+            raise ValueError(
+                f"Class '{cls}' appears in only {len(gset)} group(s). Reduce test_size "
+                "or collect more mixed groups."
+            )
