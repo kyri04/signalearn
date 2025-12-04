@@ -1,21 +1,8 @@
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA
-from sklearn.model_selection import RandomizedSearchCV
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.preprocessing import StandardScaler
-
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.svm import SVR
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
-
 from collections import Counter
 import numpy as np
 
@@ -253,49 +240,6 @@ def positive_class_scores(model, X, n_classes=2):
             return scores if scores.ndim == 1 else scores[:, 1]
         return scores
     raise RuntimeError("Model does not expose predict_proba or decision_function.")
-
-
-def get_param_grid(classify_method):
-    searchers = {
-        'dt': {
-            'criterion': ['gini', 'entropy', 'log_loss'],
-            'max_depth': [None, 10, 20, 50],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 5]
-        },
-        'rf': {
-            'n_estimators': [200, 300, 500],
-            'max_depth': [None, 10, 20, 50],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 5],
-            'criterion': ['gini', 'entropy', 'log_loss'],
-            'max_features': ['sqrt', 'log2', None, 0.2, 0.5, 1.0],
-            'bootstrap': [True, False]
-        },
-        'svm': {
-            'C': [0.1, 1, 10, 100],
-            'kernel': ['linear', 'rbf', 'poly', 'sigmoid'],
-            'gamma': ['scale', 'auto']
-        },
-        'lr': {
-            'penalty': ['l1', 'l2', 'elasticnet', 'none'],
-            'C': [0.1, 1, 10, 100],
-            'solver': ['liblinear', 'saga']
-        },
-        'knn': {
-            'n_neighbors': [3, 5, 7, 9, 11],
-            'weights': ['uniform', 'distance'],
-            'metric': ['euclidean', 'manhattan', 'minkowski']
-        },
-        'gb': {
-            'n_estimators': [50, 100, 200, 300],
-            'learning_rate': [0.01, 0.05, 0.1, 0.2, 0.3],
-            'max_depth': [2, 3, 5, 10],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 5]
-        }
-    }
-    return searchers[classify_method]
 
 def unique_groups_index(groups):
     groups = np.asarray(groups)
@@ -862,30 +806,3 @@ def combine_ordinal_results(results, cutoff=0.5):
         set_results=set_results,
         set_meta=set_meta
     )
-
-def check_split_feasible(points, target, group, test_size):
-    return
-    if group is None:
-        return
-
-    group_classes = {}
-    class_groups = {}
-    for p in points:
-        g = getattr(p, group, None)
-        c = getattr(p, target, None)
-        if g is None or c is None:
-            continue
-        group_classes.setdefault(g, set()).add(c)
-        class_groups.setdefault(c, set()).add(g)
-
-    total_groups = len(group_classes)
-    if total_groups == 0:
-        return
-
-    max_test_groups = max(1, int(np.ceil(total_groups * test_size)))
-    for cls, gset in class_groups.items():
-        if len(gset) <= max_test_groups:
-            raise ValueError(
-                f"Class '{cls}' appears in only {len(gset)} group(s). Reduce test_size "
-                "or collect more mixed groups."
-            )

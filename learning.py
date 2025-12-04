@@ -8,8 +8,8 @@ def classify(
     points,
     y_attr,
     target,
+    model,
     group=None,
-    model=RandomForestClassifier(),
     scaler=None,
     sampler=None,
     test_size=0.2,
@@ -103,8 +103,8 @@ def regress(
     points,
     y_attr,
     target,
+    model,
     group=None,
-    model=RandomForestRegressor(),
     scaler=None,
     sampler=None,
     test_size=0.2,
@@ -182,3 +182,29 @@ def regress(
         }
     )
     return res
+
+def cluster(
+    points,
+    y_attr,
+    model,
+):
+    X, _, _ = build_feature_matrix(points, y_attr)
+    labels = model.fit_predict(X)
+    name = snake(model.__class__.__name__)
+    set_each(points, name, labels)
+    set_meta(points, name)
+    return points
+
+def reduce(
+    points,
+    y_attr,
+    model,
+):
+    X, _, _ = build_feature_matrix(points, y_attr)
+    Z = model.fit_transform(X)
+    prefix = snake(model.__class__.__name__)
+    for j in range(Z.shape[1]):
+        attr = f"{prefix}{j+1}"
+        set_each(points, attr, Z[:, j])
+        set_meta(points, attr)
+    return points

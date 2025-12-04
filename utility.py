@@ -253,67 +253,14 @@ def grid_num_to_xy(grid_number, total_cells, snake=False, zero_based=True):
     grid_y = row + 1
     return grid_x, grid_y
 
-import numpy as np
-
-def grid_boundaries(points, xattr, yattr, sizeattr, include_empty=True, exclude_edges=True):
-    """
-    1-based coords: x,y in [1..W],[1..H] where [W,H] = getattr(point, sizeattr).
-    Returns N lists (one per group) of boundary points. 
-    """
-    # normalize to list-of-groups
-    is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
-    groups = points if is_grouped else [points]
-
-    # grid size (W,H) from first point
-    W, H = map(int, getattr(groups[0][0], sizeattr))
-
-    # votes per 1-based cell
-    cell_codes = {}
-    for gi, group in enumerate(groups):
-        for p in group:
-            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
-            if 1 <= x <= W and 1 <= y <= H:
-                cell_codes.setdefault((y, x), []).append(gi)
-
-    # build 0-based grid
-    grid = np.full((H, W), np.nan)
-    for (y, x), codes in cell_codes.items():
-        y0, x0 = y-1, x-1
-        vals, counts = np.unique(codes, return_counts=True)
-        grid[y0, x0] = float(vals[np.argmax(counts)])
-
-    # boundary mask (4-neighborhood)
-    boundary = np.zeros_like(grid, dtype=bool)
-    nbrs = [(-1,0),(1,0),(0,-1),(0,1)]
-    for y0 in range(H):
-        for x0 in range(W):
-            cur = grid[y0, x0]
-            if np.isnan(cur): 
-                continue
-            for dy, dx in nbrs:
-                ny, nx = y0+dy, x0+dx
-                if 0 <= ny < H and 0 <= nx < W:
-                    nb = grid[ny, nx]
-                    if (not np.isnan(nb) and nb != cur) or (include_empty and np.isnan(nb)):
-                        boundary[y0, x0] = True; break
-                else:
-                    if include_empty:
-                        boundary[y0, x0] = True; break
-
-    # collect boundary points, excluding 1-based outer frame if requested
-    out = []
-    for gi, group in enumerate(groups):
-        pts = []
-        for p in group:
-            x = int(getattr(p, xattr)); y = int(getattr(p, yattr))
-            if not (1 <= x <= W and 1 <= y <= H):
-                continue
-            if exclude_edges and (x == 1 or x == W or y == 1 or y == H):
-                continue
-            if boundary[y-1, x-1]:
-                pts.append(p)
-        out.append(pts)
-    return out
+def group_points(points, group_attr=None):
+    if group_attr is None:
+        return [points]
+    group_map = {}
+    for p in points:
+        g = getattr(p, group_attr, None)
+        group_map.setdefault(g, []).append(p)
+    return list(group_map.values())
 
 def filter_numeric(points, attr):
     ok = []
@@ -325,48 +272,98 @@ def filter_numeric(points, attr):
             print(f"Removing {p.name} with non-numeric {attr}")
     return ok
 
-def normalise_int_attr(points, attr):
-    for p in points:
-        v = getattr(p, attr, None)
-        if isinstance(v, (int, list)):
-            continue
-
-        raw = str(v).strip()
-        cleaned = raw.strip('"').strip("'").strip()
-
-        if cleaned.upper() == "DATA MISSING":
-            continue
-
-        if cleaned.startswith('[') and cleaned.endswith(']'):
-            try:
-                parsed = ast.literal_eval(cleaned)
-            except Exception:
-                continue
-
-            if isinstance(parsed, (int, list)):
-                setattr(p, attr, parsed)
-            continue
-
-        if ',' in cleaned:
-            try:
-                values = [
-                    int(x.strip())
-                    for x in cleaned.split(',')
-                    if x.strip()
-                ]
-            except ValueError:
-                continue
-
-            setattr(p, attr, values)
-            continue
-
-        try:
-            scalar = int(cleaned)
-        except ValueError:
-            continue
-
-        setattr(p, attr, scalar)
-
-def add_attr(points, attr, value):
+def set_all(points, new_attr, value):
     for point in points:
-        setattr(point, attr, value)
+        setattr(point, new_attr, value)
+    return points
+
+def set_each(points, new_attr, values):
+    for point, value in zip(points, values):
+        setattr(point, new_attr, value)
+    return points
+
+def set_func(points, attr, func):
+    name = getattr(func, "__name__", "")
+    new_attr = f"{attr}_{name}" if name else attr
+    for p in points:
+        setattr(p, new_attr, func(getattr(p, attr)))
+    set_meta(points, new_attr, unit=None, label=None)
+    return points
+
+def set_meta(points, attr, unit=None, label=None):
+    if not points:
+        return points
+    first = points[0]
+    units = getattr(first, "units", None)
+    labels = getattr(first, "labels", None)
+    if unit is None and isinstance(units, dict):
+        unit = units.get(attr, None)
+    if label is None:
+        label = pretty(attr)
+    for p in points:
+        u = getattr(p, "units", None)
+        l = getattr(p, "labels", None)
+        if isinstance(u, dict) and unit is not None:
+            u[attr] = unit
+        if isinstance(l, dict) and label is not None:
+            l[attr] = label
+    return points
+
+def rename(points, old_attr, new_attr):
+    if isinstance(points, (list, tuple)):
+        pts = list(points)
+    else:
+        pts = [points]
+    for p in pts:
+        if hasattr(p, old_attr):
+            setattr(p, new_attr, getattr(p, old_attr))
+            delattr(p, old_attr)
+        u = getattr(p, "units", None)
+        if isinstance(u, dict) and old_attr in u:
+            u[new_attr] = u.pop(old_attr)
+        l = getattr(p, "labels", None)
+        if isinstance(l, dict) and old_attr in l:
+            l[new_attr] = l.pop(old_attr)
+    return points
+
+def entropy(y, eps=1e-9):
+    y = np.asarray(y, float)
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    s = y.sum()
+    if s <= 0:
+        return 0.0
+    p = y / s
+    return float(-(p * np.log(p + eps)).sum())
+
+def max_fraction(y, eps=1e-9):
+    y = np.asarray(y, float)
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    total = y.sum()
+    if total <= 0:
+        return 0.0
+    return float(y.max() / (total + eps))
+
+def skewness(y, eps=1e-9):
+    y = np.asarray(y, float)
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    if y.size == 0:
+        return 0.0
+    m = y.mean()
+    s = y.std()
+    if s <= 0:
+        return 0.0
+    z = (y - m) / (s + eps)
+    return float((z**3).mean())
+
+def gini(y, eps=1e-9):
+    y = np.asarray(y, float).ravel()
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    if y.size == 0:
+        return 0.0
+    y = np.sort(y)
+    total = y.sum()
+    if total <= 0:
+        return 0.0
+    n = y.size
+    i = np.arange(1, n + 1, dtype=float)
+    return float((2.0 * (i * y).sum() / (n * total)) - (n + 1.0) / n)

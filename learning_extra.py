@@ -1,7 +1,5 @@
 from signalearn.preprocess import sample
 from signalearn.learning import *
-from signalearn.learning_utility import combine_results, calculate_metrics
-from sklearn.metrics import confusion_matrix
 import numpy as np
 from sklearn.base import clone
 
@@ -9,14 +7,13 @@ def ordinal_classify(
     points,
     y_attr,
     target,
+    model,
     group=None,
-    model=RandomForestClassifier(),
     test_size=0.2,
     split_state=42,
     scaler=None,
     sampler=None
 ):
-    check_split_feasible(points, target, group, test_size)
     classes = sorted(find_unique(points, target))
     thresholds = classes[1:]
     results = {}
@@ -61,7 +58,6 @@ def shuffle_learn(
     scaler=None,
     sampler=None
 ):
-    check_split_feasible(points, target, group, test_size)
     results = []
     for rs in range(shuffles):
         results.append(learn_func(
@@ -94,7 +90,6 @@ def attr_curve(
     scaler=None,
     sampler=None
 ):
-    check_split_feasible(points, target, group, test_size)
     rng = np.random.default_rng(split_state)
 
     values = np.array([getattr(p, by_attribute) for p in points])
@@ -161,7 +156,6 @@ def data_curve(
     scaler=None,
     sampler=None
 ):
-    check_split_feasible(points, target, group, test_size)
     fractions = np.linspace(start_fraction, 1.0, divisions)
     results = []
 

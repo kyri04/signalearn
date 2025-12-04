@@ -110,3 +110,15 @@ def format_attributes(obj, title):
         else:
             lines.append(f"{k}: {v}")
     return "\n".join(lines)
+
+def pretty(s):
+    s = str(s).strip()
+    parts = s.replace("-", "_").split("_")
+    parts = [p for p in parts if p]
+    return " ".join(p.capitalize() for p in parts) if parts else ""
+
+def pretty_func(label, func):
+    if not callable(func):
+        return label
+    name = pretty(func.__name__)
+    return f"{name} ({label})" if name else label

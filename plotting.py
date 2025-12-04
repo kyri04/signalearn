@@ -1,19 +1,9 @@
-import os
 import matplotlib.pyplot as plt
 import numpy as np
-from signalearn.learning_utility import reduce, scale
 from signalearn.utility import *
 from sklearn.metrics import roc_curve, roc_auc_score
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
-
-def _format_callable_name(func):
-    if not callable(func):
-        return None
-    name = getattr(func, "__name__", None)
-    if not name or name == "<lambda>":
-        name = func.__class__.__name__
-    return name.capitalize()
 
 def save_plot(plot, filename, dpi=300, extension='pdf'):
     fig = plot[0]
@@ -104,8 +94,8 @@ def plot_importances(
         else:
             med_scaled = np.full_like(ref_curve, imp_min)
 
-        func_name = _format_callable_name(yfunc) or "Function"
-        lbl = f"{func_name} {ylabel}"
+        func_name = pretty(yfunc.__name__) if callable(yfunc) else ""
+        lbl = f"{func_name} {ylabel}" if func_name else ylabel
         ax.plot(x_imp, med_scaled, linestyle=":", color="0", label=lbl)
 
     ax.set_yticks([])
@@ -116,75 +106,27 @@ def plot_importances(
     fig.tight_layout()
     return fig, ax
 
-def plot_pca(points, y_attr, label=None, n_components=2):
+def plot_scatter(points, x_attr, y_attr, group_attr=None):
     plt.close('all')
-    y = [getattr(point, y_attr) for point in points]
-
-    labels = None
-    savename = ""
-    if isinstance(label, str):
-        labels = [getattr(point, label) for point in points] if label else None
-        savename = label
-    if isinstance(label, list):
-        labels = ["_".join(str(getattr(point, attr)) for attr in label) for point in points]
-        savename = ""
-        for l in label:
-            savename += f"-{l}"
-
-    if labels:
-        unique_labels = list(set(labels))
-        label_to_color = {label: idx for idx, label in enumerate(unique_labels)}
-        colors = [label_to_color[label] for label in labels]
-        cmap = plt.colormaps.get_cmap('viridis').resampled(len(unique_labels))
+    fig, ax = plt.subplots()
+    if group_attr is None:
+        groups = {None: points}
     else:
-        colors = None
-        cmap = None
-
-    y_reduced = reduce(y, n_components)
-
-    if n_components == 2:
-        fig, ax = plt.subplots()
-        ax.scatter(
-            y_reduced[:, 0],
-            y_reduced[:, 1],
-            alpha=0.7,
-            edgecolors='k',
-            c=colors,
-            cmap=cmap
-        )
-        ax.set_title("Principal Component Analysis (2D)")
-        ax.set_xlabel("Principal Component 1")
-        ax.set_ylabel("Principal Component 2")
-        ax.grid(True)
-
-    else:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(
-            y_reduced[:, 0],
-            y_reduced[:, 1],
-            y_reduced[:, 2],
-            alpha=0.7,
-            edgecolors='k',
-            c=colors,
-            cmap=cmap
-        )
-        ax.set_title("Principal Component Analysis (3D)")
-        ax.set_xlabel("Principal Component 1")
-        ax.set_ylabel("Principal Component 2")
-        ax.set_zlabel("Principal Component 3")
-
-    if label is not None and labels:
-        unique_labels = list(set(labels))
-        cmap = plt.colormaps.get_cmap('viridis').resampled(len(unique_labels))
-        legend1 = ax.legend(
-            handles=[plt.Line2D([0], [0], marker='o', color='w', label=unique_label,
-                                markersize=10, markerfacecolor=cmap(idx / len(unique_labels)))
-                     for idx, unique_label in enumerate(unique_labels)],
-            title="Labels"
-        )
-        ax.add_artist(legend1)
-
+        groups = {}
+        for p in points:
+            g = getattr(p, group_attr, None)
+            groups.setdefault(g, []).append(p)
+    colors = plt.colormaps.get_cmap('tab10').resampled(max(len(groups), 1))
+    for i, (g, pts) in enumerate(groups.items()):
+        xs = [getattr(p, x_attr) for p in pts]
+        ys = [getattr(p, y_attr) for p in pts]
+        lbl = str(g) if group_attr is not None else None
+        ax.scatter(xs, ys, alpha=0.7, edgecolors='k', color=colors(i), label=lbl)
+    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if group_attr is not None:
+        ax.legend()
     fig.tight_layout()
     return fig, ax
 
@@ -210,49 +152,46 @@ def plot_point(point, x_attr, y_attr, func=None):
     fig.tight_layout()
     return fig, ax
 
-def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75)):
+def plot_points_range(points, x_attr, y_attr, func=None, q=(0.25, 0.5, 0.75), group_attr=None):
     plt.close('all')
     fig, ax = plt.subplots()
 
-    X = np.asarray(getattr(points[0], x_attr))
-    Y = np.vstack([(getattr(p, y_attr) if func is None else func(getattr(p, y_attr))) for p in points])
+    if group_attr is None:
+        X = np.asarray(getattr(points[0], x_attr))
+        Y = np.vstack([(getattr(p, y_attr) if func is None else func(getattr(p, y_attr))) for p in points])
 
-    xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
+        xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
 
-    Y[~np.isfinite(Y)] = np.nan
-    q1, med, q3 = np.nanquantile(Y, q, axis=0)
+        Y[~np.isfinite(Y)] = np.nan
+        q1, med, q3 = np.nanquantile(Y, q, axis=0)
 
-    m = np.isfinite(q1) & np.isfinite(med) & np.isfinite(q3)
-    ax.fill_between(X[m], q1[m], q3[m], alpha=0.25, label='IQR')
-    ax.plot(X[m], med[m], lw=1.5, label='Median')
+        m = np.isfinite(q1) & np.isfinite(med) & np.isfinite(q3)
+        ax.fill_between(X[m], q1[m], q3[m], alpha=0.25, label='IQR')
+        ax.plot(X[m], med[m], lw=1.5, label='Median')
+
+    else:
+        groups = group_points(points, group_attr)
+        xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
+        for pts in groups:
+            if not pts:
+                continue
+            X = np.asarray(getattr(pts[0], x_attr))
+            Y = np.vstack([(getattr(p, y_attr) if func is None else func(getattr(p, y_attr))) for p in pts])
+            Y[~np.isfinite(Y)] = np.nan
+            mean = np.nanmean(Y, axis=0)
+            m = np.isfinite(mean)
+            gval = getattr(pts[0], group_attr, None)
+            lbl = str(gval) if gval is not None else None
+            ax.plot(X[m], mean[m], lw=1.5, label=lbl)
 
     ax.set_yticks([])
     ax.set_xlabel(xlabel)
-
-    func_label = _format_callable_name(func)
-    ylabel = ylabel if func_label is None else f'{func_label} {ylabel}'
+    ylabel = pretty_func(ylabel, func)
     ax.set_ylabel(ylabel)
 
     ax.legend()
     fig.tight_layout()
     return fig, ax
-
-def plot_scaled(points, x_attr, y_attr, idx=0):
-    ys_scaled = scale(np.array([getattr(point, y_attr) for point in points]))
-
-    plt.close('all')
-    fig, ax = plt.subplots()
-    ax.set_yticklabels([])
-
-    xlabel, ylabel = get_axes_labels(points[idx], x_attr, y_attr)
-
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(f"Scaled {ylabel}")
-
-    ax.plot(getattr(points[idx], x_attr), ys_scaled[0])
-
-    fig.tight_layout()
-    return plt
 
 def plot_points(points, x_attr, y_attr, func=None, offset=0.1):
     plt.close('all')
@@ -267,9 +206,7 @@ def plot_points(points, x_attr, y_attr, func=None, offset=0.1):
     ax.set_yticks([])
 
     xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
-
-    func_label = _format_callable_name(func)
-    ylabel = ylabel if func_label is None else f"{func_label} {ylabel}"
+    ylabel = pretty_func(ylabel, func)
     ax.set_ylabel(ylabel)
 
     ax.set_xlabel(xlabel)
@@ -316,18 +253,18 @@ def plot_func_difference(points_a, points_b, x_attr, y_attr, func=np.mean):
     fig.tight_layout()
     return plt
 
-def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
+def plot_distribution(points, y_attr, func=None, group_attr=None):
     plt.close('all')
     fig, ax = plt.subplots()
-    is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
-    groups = points if is_grouped else [points]
+    groups = group_points(points, group_attr)
 
     def values_from(group):
         vals = []
         for p in group:
             arr = getattr(p, y_attr, None)
-            if arr is not None and len(arr) > 0:
-                vals.append(yfunc(arr))
+            if arr is None:
+                continue
+            vals.append(arr)
         vals = np.asarray(vals, float)
         return func(vals) if callable(func) else vals
 
@@ -346,13 +283,9 @@ def plot_distribution(points, y_attr, yfunc=np.mean, func=None):
         ax.hist(gv, bins=bins, histtype="step", linewidth=1.8, label=f"Group {i}")
 
     first_point = groups[0][0] if groups and groups[0] else None
-    func_name = _format_callable_name(func) or ""
-
-    ylabel = first_point.units[y_attr]
-    yfunc_label = _format_callable_name(yfunc)
-    x_label_core = f"{(yfunc_label or '').strip()} {ylabel}".strip()
-
-    ax.set_xlabel(f"{func_name}({x_label_core})" if func_name else x_label_core)
+    xlabel, = get_axes_labels(first_point, y_attr)
+    xlabel = pretty_func(xlabel, func)
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Frequency")
     if len(groups) > 1:
         ax.legend()
@@ -474,12 +407,11 @@ def plot_confusion_matrix(result):
     fig.tight_layout()
     return fig, ax
 
-def plot_grid(points, x_attr, y_attr, grid_size):
+def plot_grid(points, x_attr, y_attr, grid_size, group_attr=None):
     plt.close('all')
     fig, ax = plt.subplots()
 
-    is_grouped = isinstance(points, (list, tuple)) and points and isinstance(points[0], (list, tuple))
-    groups = points if is_grouped else [points]
+    groups = group_points(points, group_attr)
 
     cells = {}
 
