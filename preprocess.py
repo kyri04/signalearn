@@ -66,6 +66,27 @@ def trim(points, x_attr, amount, mode='both'):
 
     return points
 
+def select(points, x_attr, start, end):
+    for point in points:
+        x_raw = getattr(point, x_attr, None)
+        x = np.asarray(x_raw, dtype=float)
+
+        orig_len = x.shape[0]
+
+        mask = (x >= start) & (x <= end)
+
+        attrs_to_select = []
+        for name, value in point.__dict__.items():
+            arr = np.asarray(value)
+            if arr.ndim >= 1 and arr.shape[0] == orig_len:
+                attrs_to_select.append((name, arr))
+
+        setattr(point, x_attr, x[mask])
+        for name, arr in attrs_to_select:
+            setattr(point, name, arr[mask])
+
+    return points
+
 def resample(points, x_axis, rate):
     rate = float(rate)
     step = 1.0 / rate
