@@ -116,12 +116,12 @@ def plot_scatter(points, x_attr, y_attr, group_attr=None):
         for p in points:
             g = getattr(p, group_attr, None)
             groups.setdefault(g, []).append(p)
-    colors = plt.colormaps.get_cmap('tab10').resampled(max(len(groups), 1))
+    # colors = plt.colormaps.get_cmap('tab10').resampled(max(len(groups), 1))
     for i, (g, pts) in enumerate(groups.items()):
         xs = [getattr(p, x_attr) for p in pts]
         ys = [getattr(p, y_attr) for p in pts]
         lbl = str(g) if group_attr is not None else None
-        ax.scatter(xs, ys, alpha=0.7, edgecolors='k', color=colors(i), label=lbl)
+        ax.scatter(xs, ys, alpha=0.7, edgecolors='k', label=lbl)
     xlabel, ylabel = get_axes_labels(points[0], x_attr, y_attr)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
