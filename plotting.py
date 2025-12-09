@@ -116,7 +116,6 @@ def plot_scatter(points, x_attr, y_attr, group_attr=None):
         for p in points:
             g = getattr(p, group_attr, None)
             groups.setdefault(g, []).append(p)
-    # colors = plt.colormaps.get_cmap('tab10').resampled(max(len(groups), 1))
     for i, (g, pts) in enumerate(groups.items()):
         xs = [getattr(p, x_attr) for p in pts]
         ys = [getattr(p, y_attr) for p in pts]
@@ -149,6 +148,88 @@ def plot_point(point, x_attr, y_attr, func=None):
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
+    fig.tight_layout()
+    return fig, ax
+
+def plot_point_peaks(point, x_attr, y_attr, pos_attr, fwhm_attr, func=None, colors=None):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    X = np.asarray(getattr(point, x_attr), dtype=float)
+    Y_raw = getattr(point, y_attr)
+    Y = np.asarray(Y_raw, dtype=float)
+
+    if func is not None:
+        Y_plot = func(Y)
+    else:
+        Y_plot = Y
+
+    xlabel, ylabel = get_axes_labels(point, x_attr, y_attr)
+    ax.plot(X, Y_plot, lw=1, color="C0")
+
+    if isinstance(pos_attr, str):
+        pos_attrs = [pos_attr]
+    else:
+        pos_attrs = list(pos_attr)
+
+    if isinstance(fwhm_attr, str):
+        fwhm_attrs = [fwhm_attr]
+    else:
+        fwhm_attrs = list(fwhm_attr)
+
+    if len(pos_attrs) != len(fwhm_attrs):
+        raise ValueError("pos_attr and fwhm_attr must have the same length when provided as lists.")
+
+    if colors is None:
+        color_cycle = plt.rcParams.get("axes.prop_cycle", None)
+        if color_cycle is not None:
+            colors = color_cycle.by_key().get("color", [])
+        if not colors:
+            colors = ["C1", "C2", "C3", "C4", "C5"]
+
+    for idx_attr, (p_attr, w_attr) in enumerate(zip(pos_attrs, fwhm_attrs)):
+        if not hasattr(point, p_attr) or not hasattr(point, w_attr):
+            continue
+
+        pos_vals = np.asarray(getattr(point, p_attr), dtype=float)
+        fwhm_vals = np.asarray(getattr(point, w_attr), dtype=float)
+
+        if pos_vals.shape != fwhm_vals.shape:
+            raise ValueError(f"Shape mismatch between {p_attr} and {w_attr}.")
+
+        if pos_vals.ndim == 0:
+            pos_vals = pos_vals.reshape(1)
+            fwhm_vals = fwhm_vals.reshape(1)
+
+        color = colors[idx_attr % len(colors)]
+
+        for pos, width in zip(pos_vals.ravel(), fwhm_vals.ravel()):
+            if not np.isfinite(pos) or not np.isfinite(width) or width <= 0:
+                continue
+
+            # Find approximate peak height from the (possibly transformed) signature
+            i = int(np.argmin(np.abs(X - pos)))
+            peak_y = float(Y_plot[i]) if np.isfinite(Y_plot[i]) else np.nan
+            if not np.isfinite(peak_y):
+                continue
+
+            half_width = 0.5 * width
+            x_left = pos - half_width
+            x_right = pos + half_width
+
+            # Clip to the data range
+            x_min, x_max = np.nanmin(X), np.nanmax(X)
+            x_left = max(x_left, x_min)
+            x_right = min(x_right, x_max)
+            if x_right <= x_left:
+                continue
+
+            ax.axvline(pos, color=color, linestyle="--", linewidth=1, alpha=0.7)
+            ax.hlines(peak_y, x_left, x_right, color=color, linewidth=2, alpha=0.9)
+            ax.plot(pos, peak_y, marker="o", color=color, markersize=4)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     fig.tight_layout()
     return fig, ax
 
