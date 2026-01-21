@@ -1,5 +1,6 @@
 import numpy as np
 from signalearn.general_utility import *
+from signalearn.classes import *
 import pickle
 from scipy.fft import *
 from scipy.interpolate import UnivariateSpline
@@ -272,98 +273,18 @@ def filter_numeric(points, attr):
             print(f"Removing {p.name} with non-numeric {attr}")
     return ok
 
-def set_all(points, new_attr, value):
-    for point in points:
-        setattr(point, new_attr, value)
-    return points
+def get_labels(x):
+    xlabel = getattr(x, "label", None) or "x"
+    xunit = getattr(x, "unit", None) or ""
 
-def set_each(points, new_attr, values):
-    for point, value in zip(points, values):
-        setattr(point, new_attr, value)
-    return points
+    return xlabel, xunit
 
-def set_func(points, attr, func):
-    name = getattr(func, "__name__", "")
-    new_attr = f"{attr}_{name}" if name else attr
-    for p in points:
-        setattr(p, new_attr, func(getattr(p, attr)))
-    set_meta(points, new_attr, unit=None, label=None)
-    return points
-
-def set_meta(points, attr, unit=None, label=None):
-    if not points:
-        return points
-    first = points[0]
-    units = getattr(first, "units", None)
-    labels = getattr(first, "labels", None)
-    if unit is None and isinstance(units, dict):
-        unit = units.get(attr, None)
-    if label is None:
-        label = pretty(attr)
-    for p in points:
-        u = getattr(p, "units", None)
-        l = getattr(p, "labels", None)
-        if isinstance(u, dict) and unit is not None:
-            u[attr] = unit
-        if isinstance(l, dict) and label is not None:
-            l[attr] = label
-    return points
-
-def rename(points, old_attr, new_attr):
-    if isinstance(points, (list, tuple)):
-        pts = list(points)
-    else:
-        pts = [points]
-    for p in pts:
-        if hasattr(p, old_attr):
-            setattr(p, new_attr, getattr(p, old_attr))
-            delattr(p, old_attr)
-        u = getattr(p, "units", None)
-        if isinstance(u, dict) and old_attr in u:
-            u[new_attr] = u.pop(old_attr)
-        l = getattr(p, "labels", None)
-        if isinstance(l, dict) and old_attr in l:
-            l[new_attr] = l.pop(old_attr)
-    return points
-
-def entropy(y, eps=1e-9):
-    y = np.asarray(y, float)
-    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-    s = y.sum()
-    if s <= 0:
-        return 0.0
-    p = y / s
-    return float(-(p * np.log(p + eps)).sum())
-
-def max_fraction(y, eps=1e-9):
-    y = np.asarray(y, float)
-    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-    total = y.sum()
-    if total <= 0:
-        return 0.0
-    return float(y.max() / (total + eps))
-
-def skewness(y, eps=1e-9):
-    y = np.asarray(y, float)
-    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-    if y.size == 0:
-        return 0.0
-    m = y.mean()
-    s = y.std()
-    if s <= 0:
-        return 0.0
-    z = (y - m) / (s + eps)
-    return float((z**3).mean())
-
-def gini(y, eps=1e-9):
-    y = np.asarray(y, float).ravel()
-    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-    if y.size == 0:
-        return 0.0
-    y = np.sort(y)
-    total = y.sum()
-    if total <= 0:
-        return 0.0
-    n = y.size
-    i = np.arange(1, n + 1, dtype=float)
-    return float((2.0 * (i * y).sum() / (n * total)) - (n + 1.0) / n)
+def new_sample(sample, updates=None):
+    params = {k: f.values for k, f in sample.fields.items()}
+    labels = {k: f.label for k, f in sample.fields.items()}
+    units = {k: f.unit for k, f in sample.fields.items()}
+    if updates:
+        params.update(updates)
+    params["labels"] = labels
+    params["units"] = units
+    return Sample(params)
