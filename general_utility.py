@@ -5,6 +5,8 @@ import re
 import inspect, ast, textwrap
 from numbers import Number
 import numpy as np
+import subprocess
+from pathlib import Path
 
 def name_from_path(filepath):
     return os.path.splitext(os.path.basename(filepath))[0]
@@ -122,3 +124,44 @@ def pretty_func(label, func):
         return label
     name = pretty(func.__name__)
     return f"{name} ({label})" if name else label
+
+def display_metadata(markdown: bool = False) -> str:
+
+    def _repo_root() -> Path:
+        here = Path(__file__).resolve()
+        for parent in [here] + list(here.parents):
+            if (parent / ".git").exists():
+                return parent
+        raise RuntimeError("Could not locate git repository root")
+
+    def _git(args: list[str]) -> str:
+        repo = _repo_root()
+        return subprocess.check_output(
+            ["git", "-C", str(repo), *args],
+            text=True,
+        ).strip()
+
+    repo = _repo_root()
+
+    commit = _git(["rev-parse", "--short", "HEAD"])
+    full_commit = _git(["rev-parse", "HEAD"])
+    branch = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+
+    dirty = (
+        subprocess.call(["git", "-C", str(repo), "diff", "--quiet"]) != 0
+        or subprocess.call(["git", "-C", str(repo), "diff", "--cached", "--quiet"]) != 0
+    )
+
+    status = "DIRTY" if dirty else "CLEAN"
+
+    if markdown:
+        return (
+            f"`signalearn` · **branch** `{branch}` · "
+            f"**commit** `{commit}` · **{status}**  \n"
+            f"`{full_commit}`"
+        )
+
+    return (
+        f"signalearn | branch {branch} | commit {commit} | "
+        f"{status} | {full_commit}"
+    )
