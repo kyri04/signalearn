@@ -103,14 +103,22 @@ def load_data(directory, map=None):
     for ext in exts:
         for fp in sorted(directory.glob(f"*{ext}")):
             sample = sample_from_file(fp)
-            if map_key and map_data and map_key in sample.fields:
-                ident = sample.fields[map_key].values
-                if isinstance(ident, np.ndarray):
-                    if ident.shape == ():
-                        ident = ident.item()
-                    elif ident.size > 0:
-                        ident = ident.ravel()[0]
-                row = map_data.get(str(ident))
+            if map_key and map_data:
+                row = None
+                if map_key in sample.fields:
+                    ident = sample.fields[map_key].values
+                    if isinstance(ident, np.ndarray):
+                        if ident.shape == ():
+                            ident = ident.item()
+                        elif ident.size > 0:
+                            ident = ident.ravel()[0]
+                    row = map_data.get(str(ident))
+                else:
+                    name = fp.stem
+                    for key in sorted(map_data.keys(), key=len, reverse=True):
+                        if key and key in name:
+                            row = map_data[key]
+                            break
                 if row:
                     for k, v in row.items():
                         setattr(sample, k, v)

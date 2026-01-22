@@ -7,6 +7,7 @@ from numbers import Number
 import numpy as np
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 def name_from_path(filepath):
     return os.path.splitext(os.path.basename(filepath))[0]
@@ -165,3 +166,6 @@ def display_metadata(markdown: bool = False) -> str:
         f"signalearn | branch {branch} | commit {commit} | "
         f"{status} | {full_commit}"
     )
+
+def make_namespace(d):
+    return SimpleNamespace(**d)

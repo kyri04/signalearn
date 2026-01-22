@@ -5,23 +5,21 @@ from sklearn.metrics import confusion_matrix
 import numpy as np
 
 def classify(
-    points,
-    y_attr,
+    y,
     target,
     model,
     group=None,
-    scaler=None,
-    sampler=None,
     test_size=0.2,
     split_state=42
 ):
     
-    N = len(points)
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X_full, feature_attrs, feature_blocks = build_feature_matrix(y_fields)
 
-    X_full, feature_attrs, feature_blocks = build_feature_matrix(points, y_attr)
-
-    labels = prepare_labels(points, target)
-    groups = prepare_groups(points, group)
+    labels = prepare_labels(target)
+    groups = prepare_groups(group)
+    N = len(labels)
 
     labels_encoded, encoder = encode(labels)
     unique_labels = encoder.classes_
@@ -37,10 +35,8 @@ def classify(
     X_train_raw, X_test_raw = X_full[train_idx], X_full[test_idx]
     y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
 
-    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
-
-    if sampler is not None:
-        X_train, y_train = sampler.fit_resample(X_train, y_train)
+    X_train = X_train_raw
+    X_test = X_test_raw
 
     model.fit(X_train, y_train)
 
@@ -59,21 +55,18 @@ def classify(
     feature_importance_vector = normalize_feature_importances(raw_feature_importances, total_features)
     feature_importances = feature_importances_by_attr(feature_importance_vector, feature_blocks)
 
-    pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
-    # test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
-    test_meta = {a: [getattr(points[i], a) for i in test_idx] for a in pt0_attrs}
+    pt0_attrs = set(dataset.samples[0].fields.keys())
+    test_meta = {a: [dataset.samples[i].fields[a].values for i in test_idx] for a in pt0_attrs}
 
     y_attr_param = list(feature_attrs) if len(feature_attrs) > 1 else feature_attrs[0]
 
     res = Result(
         set_params={
-            "target": target,
-            "group": group,
+            "target": target.name,
+            "group": group.name if group is not None else None,
             "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
-            "scaler": scaler.__class__.__name__ if scaler is not None else None,
-            "sampler": sampler.__class__.__name__ if sampler is not None else None,
             "y_attr": y_attr_param,
             "unique_labels": unique_labels,
             "mode": "normal"
@@ -100,21 +93,19 @@ def classify(
     return res
 
 def regress(
-    points,
-    y_attr,
+    y,
     target,
     model,
     group=None,
-    scaler=None,
-    sampler=None,
     test_size=0.2,
     split_state=42
 ):
-    N = len(points)
-
-    X_full, feature_attrs, feature_blocks = build_feature_matrix(points, y_attr)
-    y = np.array([getattr(point, target) for point in points], dtype=float)
-    groups = prepare_groups(points, group)
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X_full, feature_attrs, feature_blocks = build_feature_matrix(y_fields)
+    y = np.array([f.values for f in target.fields], dtype=float)
+    groups = prepare_groups(group)
+    N = len(y)
 
     train_idx, test_idx = get_single_split(N, None, groups, test_size, split_state)
 
@@ -126,10 +117,8 @@ def regress(
     X_train_raw, X_test_raw = X_full[train_idx], X_full[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
-    X_train, X_test = standardize_train_test(X_train_raw, X_test_raw, scaler)
-
-    if sampler is not None:
-        X_train, y_train = sampler.fit_resample(X_train, y_train)
+    X_train = X_train_raw
+    X_test = X_test_raw
 
     model.fit(X_train, y_train)
 
@@ -147,20 +136,18 @@ def regress(
     feature_importance_vector = normalize_feature_importances(raw_feature_importances, total_features)
     feature_importances = feature_importances_by_attr(feature_importance_vector, feature_blocks)
 
-    pt0_attrs   = set(points[0].__dict__) - set(get_attributes(Series))
-    test_meta = {a: np.array([getattr(points[i], a) for i in test_idx]) for a in pt0_attrs}
+    pt0_attrs = set(dataset.samples[0].fields.keys())
+    test_meta = {a: np.array([dataset.samples[i].fields[a].values for i in test_idx]) for a in pt0_attrs}
 
     y_attr_param = list(feature_attrs) if len(feature_attrs) > 1 else feature_attrs[0]
 
     res = Result(
         set_params={
-            "target": target,
-            "group": group,
+            "target": target.name,
+            "group": group.name if group is not None else None,
             "model": model.__class__.__name__,
             "test_size": test_size,
             "split_state": split_state,
-            "scaler": scaler.__class__.__name__ if scaler is not None else None,
-            "sampler": sampler.__class__.__name__ if sampler is not None else None,
             "y_attr": y_attr_param,
             "mode": "normal"
         },
@@ -184,27 +171,39 @@ def regress(
     return res
 
 def cluster(
-    points,
-    y_attr,
+    y,
     model,
 ):
-    X, _, _ = build_feature_matrix(points, y_attr)
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X, _, _ = build_feature_matrix(y_fields)
     labels = model.fit_predict(X)
     name = snake(model.__class__.__name__)
-    set_each(points, name, labels)
-    set_meta(points, name)
-    return points
+    samples = []
+    for sample, label in zip(dataset.samples, labels):
+        new = new_sample(sample, {name: label})
+        new.fields[name].label = pretty(name)
+        samples.append(new)
+    return Dataset(samples)
 
 def reduce(
-    points,
-    y_attr,
+    y,
     model,
 ):
-    X, _, _ = build_feature_matrix(points, y_attr)
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X, _, _ = build_feature_matrix(y_fields)
     Z = model.fit_transform(X)
     prefix = snake(model.__class__.__name__)
-    for j in range(Z.shape[1]):
-        attr = f"{prefix}{j+1}"
-        set_each(points, attr, Z[:, j])
-        set_meta(points, attr)
-    return points
+    samples = []
+    for i, sample in enumerate(dataset.samples):
+        updates = {}
+        for j in range(Z.shape[1]):
+            attr = f"{prefix}{j+1}"
+            updates[attr] = Z[i, j]
+        new = new_sample(sample, updates)
+        for j in range(Z.shape[1]):
+            attr = f"{prefix}{j+1}"
+            new.fields[attr].label = pretty(attr)
+        samples.append(new)
+    return Dataset(samples)

@@ -1,5 +1,6 @@
 import random
 import numpy as np
+from collections import defaultdict
 from scipy.interpolate import interp1d
 from signalearn.classes import Dataset, Sample
 from signalearn.utility import new_sample
@@ -159,3 +160,85 @@ def func(y, func=np.log):
         y_vals = y_field.values
         samples.append(new_sample(sample, {y_name: func(y_vals)}))
     return Dataset(samples)
+
+def filter(x, val, includes=True):
+    dataset = x._dataset
+    if isinstance(val, str):
+        vals = [val.lower()]
+    else:
+        vals = [v.lower() for v in val]
+
+    samples = []
+    for sample, field in zip(dataset.samples, x.fields):
+        attr_val = str(field.values).lower()
+        matched = any(v in attr_val for v in vals)
+        if matched == includes:
+            samples.append(new_sample(sample))
+    return Dataset(samples)
+
+def combine(match):
+    dataset = match._dataset
+    match_name = match.name
+    groups = defaultdict(list)
+    for sample, field in zip(dataset.samples, match.fields):
+        k = field.values
+        if k is not None:
+            groups[str(k)].append(sample)
+
+    out = []
+    for k, grp in groups.items():
+        if len(grp) < 2:
+            continue
+
+        params = {match_name: k}
+        name_vals = []
+        for p in grp:
+            if "name" in p.fields:
+                name_vals.append(str(p.fields["name"].values))
+        params["name"] = "+".join(sorted(set(name_vals))) if name_vals else str(k)
+
+        meta = {"name", match_name}
+        attrs = set()
+        for p in grp:
+            attrs.update(a for a in p.fields.keys() if a not in meta)
+
+        units_acc, labels_acc = {}, {}
+
+        for a in sorted(attrs):
+            vals = [p.fields[a].values for p in grp if a in p.fields]
+
+            arrays, scalars = [], []
+            for v in vals:
+                if isinstance(v, (str, bytes)) or np.isscalar(v):
+                    scalars.append(v)
+                else:
+                    arrays.append(np.asarray(v).ravel())
+
+            if arrays:
+                params[a] = np.concatenate(arrays, axis=0)
+            else:
+                if scalars and all(s == scalars[0] for s in scalars):
+                    params[a] = scalars[0]
+                else:
+                    seen = set()
+                    uniq = []
+                    for s in scalars:
+                        if s not in seen:
+                            seen.add(s)
+                            uniq.append(s)
+                    params[a] = uniq
+
+            for p in grp:
+                f = p.fields.get(a)
+                if f is None:
+                    continue
+                if f.unit is not None and a not in units_acc:
+                    units_acc[a] = f.unit
+                if f.label is not None and a not in labels_acc:
+                    labels_acc[a] = f.label
+
+        params["units"] = units_acc
+        params["labels"] = labels_acc
+        out.append(Sample(params))
+
+    return Dataset(out)

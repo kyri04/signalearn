@@ -7,7 +7,7 @@ def save_plot(plot, filename, dpi=300, extension='pdf'):
     fig = plot[0]
     fig.savefig(f"{filename}.{extension}", bbox_inches='tight', dpi=dpi)
 
-def plot_point(x, y):
+def plot_signal(x, y):
     plt.close('all')
     fig, ax = plt.subplots()
 

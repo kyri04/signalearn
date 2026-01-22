@@ -21,6 +21,8 @@ class Field:
         return self.values[idx]
 
     def __getattr__(self, name):
+        if "values" not in self.__dict__:
+            raise AttributeError(name)
         return getattr(self.values, name)
 
 class FieldCollection:
@@ -78,6 +80,12 @@ class FieldCollection:
     def __array__(self, dtype=None):
         arr = [np.asarray(f) for f in self.fields]
         return np.asarray(arr, dtype=dtype) if dtype is not None else np.asarray(arr)
+
+    def map(self, func):
+        fields = []
+        for f in self.fields:
+            fields.append(Field(func(f.values), label=f.label, unit=f.unit, name=f.name))
+        return FieldCollection(fields, name=self._name, dataset=self._dataset)
 
     def __iter__(self):
         return iter(self.fields)
@@ -153,10 +161,28 @@ class Dataset:
         return self.samples[idx]
 
     def __getattr__(self, name):
-        fields = [s.fields[name] for s in self.samples if name in s.fields]
+        if "samples" not in self.__dict__:
+            raise AttributeError(name)
+        samples = object.__getattribute__(self, "samples")
+        fields = [s.fields[name] for s in samples if name in s.fields]
         if not fields:
             raise AttributeError(name)
         return FieldCollection(fields, name=name, dataset=self)
+
+    def __setattr__(self, name, value):
+        if name.startswith("_") or name == "samples":
+            object.__setattr__(self, name, value)
+            return
+        if isinstance(value, FieldCollection):
+            for sample, field in zip(self.samples, value.fields):
+                sample.fields[name] = Field(field.values, label=field.label, unit=field.unit, name=name)
+            return
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) == len(self.samples):
+            for sample, v in zip(self.samples, value):
+                sample.fields[name] = Field(v, name=name)
+            return
+        for sample in self.samples:
+            sample.fields[name] = Field(value, name=name)
 
     def __dir__(self):
         names = set(object.__dir__(self))

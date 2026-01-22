@@ -1,31 +1,10 @@
 import numpy as np
 from signalearn.general_utility import *
-from signalearn.classes import *
+from signalearn.classes import Sample
 import pickle
 from scipy.fft import *
 from scipy.interpolate import UnivariateSpline
-from types import SimpleNamespace
-from collections import defaultdict
 import math
-
-def filter(points, attr, val, includes=True):
-    if isinstance(val, str):
-        vals = [val.lower()]
-    else:
-        vals = [v.lower() for v in val]
-
-    has, hasnt = [], []
-    for point in points:
-        attr_val = str(getattr(point, attr, "")).lower()
-        if any(v in attr_val for v in vals):
-            has.append(point)
-        else:
-            hasnt.append(point)
-
-    if(includes):
-        return has
-    else:
-        return hasnt
 
 def load(filepath):
 
@@ -88,9 +67,6 @@ def find_same_attribute(points):
 
     return None, None
 
-def make_namespace(d):
-    return SimpleNamespace(**d)
-
 def calculate_filtered(points, filtered):
     removed_count = len(points) - len(filtered)
     removed_percentage = (removed_count / len(points)) * 100 if points else 0
@@ -123,68 +99,6 @@ def combine_vals(points, attr, vals, new_val):
         if any(v.lower() in getattr(point, attr).lower() for v in vals): setattr(point, attr, new_val)
         
     return points
-
-def combine(points, match_id):
-    groups = defaultdict(list)
-    for p in points:
-        if hasattr(p, match_id):
-            k = getattr(p, match_id)
-            if k is not None:
-                groups[str(k)].append(p)
-
-    out = []
-    for k, grp in groups.items():
-        if len(grp) < 2:
-            continue
-
-        params = {match_id: k}
-        names = [getattr(p, "name", None) for p in grp if getattr(p, "name", None)]
-        params["name"] = "+".join(sorted(set(names))) if names else str(k)
-
-        meta = {"units", "labels", "name", match_id}
-        attrs = set()
-        for p in grp:
-            attrs.update(a for a in getattr(p, "__dict__", {}) if a not in meta)
-
-        units_acc, labels_acc = {}, {}
-
-        for a in sorted(attrs):
-            vals = [getattr(p, a) for p in grp if hasattr(p, a)]
-
-            arrays, scalars = [], []
-            for v in vals:
-                if isinstance(v, (str, bytes)) or np.isscalar(v):
-                    scalars.append(v)
-                else:
-                    arrays.append(np.asarray(v).ravel())
-
-            if arrays:
-                params[a] = np.concatenate(arrays, axis=0)
-            else:
-                if scalars and all(s == scalars[0] for s in scalars):
-                    params[a] = scalars[0]
-                else:
-                    seen = set()
-                    uniq = []
-                    for s in scalars:
-                        if s not in seen:
-                            seen.add(s)
-                            uniq.append(s)
-                    params[a] = uniq
-
-            for p in grp:
-                u = getattr(p, "units", None)
-                if isinstance(u, dict) and a in u and a not in units_acc:
-                    units_acc[a] = u[a]
-                l = getattr(p, "labels", None)
-                if isinstance(l, dict) and a in l and a not in labels_acc:
-                    labels_acc[a] = l[a]
-
-        params["units"] = units_acc
-        params["labels"] = labels_acc
-        out.append(grp[0].__class__(params))
-
-    return out
 
 def find_unique(points, attr):
 
@@ -273,6 +187,30 @@ def filter_numeric(points, attr):
             print(f"Removing {p.name} with non-numeric {attr}")
     return ok
 
+def set_each(points, new_attr, values):
+    for point, value in zip(points, values):
+        setattr(point, new_attr, value)
+    return points
+
+def set_meta(points, attr, unit=None, label=None):
+    if not points:
+        return points
+    first = points[0]
+    units = getattr(first, "units", None)
+    labels = getattr(first, "labels", None)
+    if unit is None and isinstance(units, dict):
+        unit = units.get(attr, None)
+    if label is None:
+        label = pretty(attr)
+    for p in points:
+        u = getattr(p, "units", None)
+        l = getattr(p, "labels", None)
+        if isinstance(u, dict) and unit is not None:
+            u[attr] = unit
+        if isinstance(l, dict) and label is not None:
+            l[attr] = label
+    return points
+
 def get_labels(x):
     xlabel = getattr(x, "label", None) or "x"
     xunit = getattr(x, "unit", None) or ""
@@ -288,3 +226,8 @@ def new_sample(sample, updates=None):
     params["labels"] = labels
     params["units"] = units
     return Sample(params)
+
+def as_fields(y_attr):
+    if isinstance(y_attr, (list, tuple)):
+        return list(y_attr)
+    return [y_attr]

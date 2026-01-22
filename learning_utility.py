@@ -18,57 +18,47 @@ def encode(labels):
     encoded_labels = encoder.fit_transform(labels)
     return np.array(encoded_labels), encoder
 
-def prepare_labels(points, label):
-    if isinstance(label, str):
-        labels = np.array([getattr(point, label) for point in points], dtype=str)
-    elif isinstance(label, list):
-        labels = np.array(
-            ["_".join(str(getattr(point, attr)) for attr in label) for point in points],
-            dtype=str,
-        )
+def prepare_labels(label):
+    if isinstance(label, (list, tuple)):
+        n = len(label[0].fields)
+        labels = []
+        for i in range(n):
+            parts = [str(fc.fields[i].values) for fc in label]
+            labels.append("_".join(parts))
+        return np.array(labels, dtype=str)
+    return np.array([f.values for f in label.fields], dtype=str)
 
-    return labels
+def prepare_groups(group):
+    return np.array([f.values for f in group.fields], dtype=str) if group is not None else None
 
-def prepare_groups(points, group):
-    return (
-        np.array([getattr(point, group) for point in points], dtype=str)
-        if group is not None
-        else None
-    )
-
-def build_feature_matrix(points, y_attr):
-    if not points:
-        raise ValueError("points cannot be empty when building feature matrix.")
-
-    if isinstance(y_attr, str):
-        attrs = [y_attr]
-    elif isinstance(y_attr, (list, tuple)):
+def build_feature_matrix(y_attr):
+    if isinstance(y_attr, (list, tuple)):
         if not y_attr:
             raise ValueError("y_attr list must contain at least one attribute.")
         attrs = list(y_attr)
     else:
-        raise TypeError("y_attr must be a string or a list/tuple of strings.")
+        attrs = [y_attr]
 
     feature_blocks = []
     matrices = []
     start = 0
     for attr in attrs:
-        first = np.asarray(getattr(points[0], attr), dtype=float).ravel()
+        first = np.asarray(attr.fields[0].values, dtype=float).ravel()
         length = first.size
-        block = np.empty((len(points), length), dtype=float)
+        block = np.empty((len(attr.fields), length), dtype=float)
         block[0] = first
-        for idx, point in enumerate(points[1:], start=1):
-            values = np.asarray(getattr(point, attr), dtype=float).ravel()
+        for idx, field in enumerate(attr.fields[1:], start=1):
+            values = np.asarray(field.values, dtype=float).ravel()
             if values.size != length:
-                raise ValueError(f"Attribute '{attr}' does not have consistent length across points.")
+                raise ValueError(f"Attribute '{attr.name}' does not have consistent length across points.")
             block[idx] = values
 
         matrices.append(block)
-        feature_blocks.append({"attr": attr, "start": start, "stop": start + length, "length": length})
+        feature_blocks.append({"attr": attr.name, "start": start, "stop": start + length, "length": length})
         start += length
 
     X = np.hstack(matrices) if len(matrices) > 1 else matrices[0]
-    return X, tuple(attrs), tuple(feature_blocks)
+    return X, tuple(a.name for a in attrs), tuple(feature_blocks)
 
 def normalize_feature_importances(importances, total_features):
     if importances is None or total_features == 0:
