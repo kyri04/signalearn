@@ -1,6 +1,5 @@
 import numpy as np
 from signalearn.general_utility import *
-from signalearn.classes import Sample
 import pickle
 from scipy.fft import *
 from scipy.interpolate import UnivariateSpline
@@ -30,7 +29,7 @@ def new_sample(sample, updates=None):
         params.update(updates)
     params["labels"] = labels
     params["units"] = units
-    return Sample(params)
+    return sample.__class__(params)
 
 def as_fields(y):
     if isinstance(y, (list, tuple)):

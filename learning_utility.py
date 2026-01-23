@@ -6,8 +6,18 @@ from sklearn.preprocessing import StandardScaler
 from collections import Counter
 import numpy as np
 
-from signalearn.classes import Result
+from signalearn.classes import FieldCollection
 from signalearn.utility import *
+
+def first_fieldcollection(x):
+    if isinstance(x, FieldCollection):
+        return x
+    if isinstance(x, (list, tuple)):
+        for item in x:
+            fc = first_fieldcollection(item)
+            if fc is not None:
+                return fc
+    return None
 
 def reduce(y, n_components=2):
     pca = PCA(n_components=n_components)
@@ -17,6 +27,16 @@ def encode(labels):
     encoder = LabelEncoder()
     encoded_labels = encoder.fit_transform(labels)
     return np.array(encoded_labels), encoder
+
+def _average(y_true):
+    uniq = np.unique(np.asarray(y_true, dtype=object))
+    return "binary" if uniq.size == 2 else "macro"
+
+def _clf_kwargs(y_true):
+    uniq = np.unique(np.asarray(y_true, dtype=object))
+    if uniq.size == 2:
+        return {"average": "binary", "pos_label": uniq[1], "zero_division": 0}
+    return {"average": "macro", "zero_division": 0}
 
 def prepare_labels(label):
     if isinstance(label, (list, tuple)):
@@ -517,12 +537,7 @@ def combine_results(results):
         "model": None,
     }
 
-    combined = Result(
-        set_params = combined_params,
-        set_results = agg,
-        set_meta = combined_meta
-    )
-    return combined
+    return {"params": combined_params, "results": agg, "meta": combined_meta}
 
 def best_and_worst_results(results):
     auc_ranked = []
@@ -669,11 +684,7 @@ def aggregate_result(
         "group_proportion": proportion,
     }
 
-    return Result(
-        set_params=new_params,
-        set_results=results_dict,
-        set_meta=meta_dict
-    )
+    return {"params": new_params, "results": results_dict, "meta": meta_dict}
 
 def combine_ordinal_results(results, cutoff=0.5):
     thresholds = sorted(results.keys())
@@ -791,8 +802,4 @@ def combine_ordinal_results(results, cutoff=0.5):
         "cutoff": cutoff,
     }
 
-    return Result(
-        set_params=set_params,
-        set_results=set_results,
-        set_meta=set_meta
-    )
+    return {"params": set_params, "results": set_results, "meta": set_meta}

@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from signalearn.utility import *
-from sklearn.metrics import roc_curve, roc_auc_score
 
 def save_plot(plot, filename, dpi=300, extension='pdf'):
     fig = plot[0]
