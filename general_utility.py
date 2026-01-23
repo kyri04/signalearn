@@ -37,9 +37,6 @@ def remove_trailing_letters(s):
 def time():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S") 
 
-def cleanup():
-    gc.collect()
-
 def get_attributes(cls):
     src = inspect.getsource(cls.__init__)
     src = textwrap.dedent(src)
