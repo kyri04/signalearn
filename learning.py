@@ -1,17 +1,17 @@
 from signalearn.utility import *
 from signalearn.classes import *
-from signalearn.learning_utility import *
+from signalearn.learning_utility import build_feature_matrix, prepare_labels, prepare_groups, get_single_split
 import numpy as np
 
 def split(
     dataset,
     group=None,
     test_size=0.2,
-    split_state=42
+    seed=42
 ):
     N = len(dataset.samples)
     groups = prepare_groups(group)
-    train_idx, test_idx = get_single_split(N, None, groups, test_size, split_state)
+    train_idx, test_idx = get_single_split(N, None, groups, test_size, seed)
     if groups is not None:
         assert set(groups[train_idx]).isdisjoint(set(groups[test_idx]))
 

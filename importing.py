@@ -70,6 +70,8 @@ def sample_from_file(path):
     params["labels"] = labels
     params["units"] = units
     params["name"] = path.stem
+    if "id" not in params:
+        params["id"] = path.stem
     return Sample(params)
 
 def _load_map(map_source):
