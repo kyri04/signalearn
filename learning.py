@@ -31,7 +31,11 @@ def classify(
         target = get(dataset, target)
     X, _, _ = build_feature_matrix(as_fields(x))
     y = prepare_labels(target)
-    model.fit(X, y)
+    classes = np.unique(y)
+    label_to_int = {c: i for i, c in enumerate(classes.tolist())}
+    y_int = np.array([label_to_int[v] for v in y], dtype=np.int32)
+    model.fit(X, y_int)
+    model._signalearn_classes = classes
     return model
 
 def regress(

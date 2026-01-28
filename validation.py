@@ -22,12 +22,16 @@ def predict(x, target, model):
         target = get(dataset, target)
     X, _, _ = build_feature_matrix(as_fields(x))
     y_pred = model.predict(X)
+    classes = getattr(model, "_signalearn_classes", None)
+    if classes is not None:
+        y_pred = np.asarray(y_pred, dtype=int)
+        y_pred = classes[y_pred]
 
     y_score = None
     score_fn = getattr(model, "predict_proba", None) or getattr(model, "decision_function", None)
     if score_fn is not None:
-        y_score = score_fn(X)
-        if getattr(y_score, "ndim", 0) == 2 and y_score.shape[1] == 2:
+        y_score = np.asarray(score_fn(X))
+        if y_score.ndim == 2 and y_score.shape[1] == 2:
             y_score = y_score[:, 1]
 
     y_true = values(target)
