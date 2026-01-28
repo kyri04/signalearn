@@ -120,8 +120,18 @@ def pretty(s):
 def pretty_func(label, func):
     if not callable(func):
         return label
-    name = pretty(func.__name__)
-    return f"{name} ({label})" if name else label
+    name = str(getattr(func, "__name__", "")).strip()
+    if not name:
+        return label
+
+    lbl = "" if label is None else str(label).strip()
+    if lbl.startswith("$") and lbl.endswith("$") and lbl.count("$") == 2:
+        lbl = lbl[1:-1].strip()
+    if not lbl:
+        return f"$\\text{{{name}}}$"
+    if "$" in lbl or "\\" in lbl:
+        return f"$\\text{{{name}}}\\ {lbl}$"
+    return f"$\\text{{{name}}}\\ \\text{{{lbl}}}$"
 
 def display_metadata(markdown: bool = False) -> str:
 

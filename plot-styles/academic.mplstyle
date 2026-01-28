@@ -42,3 +42,4 @@ savefig.pad_inches : 0.05
 
 font.family : serif
 mathtext.fontset : dejavuserif
+legend.fontsize: 9

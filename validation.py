@@ -12,12 +12,14 @@ from sklearn.metrics import (
 from sklearn.base import clone
 
 from signalearn.utility import as_fields
-from signalearn.learning_utility import build_feature_matrix, prepare_labels, clf_kwargs, first, eval_once, values
+from signalearn.learning_utility import build_feature_matrix, prepare_labels, clf_kwargs, first, eval_once, values, get
 from signalearn.learning import split
 from signalearn.classes import Dataset, Sample
 
 def predict(x, target, model):
     dataset = first(x)._dataset
+    if target._dataset is not dataset:
+        target = get(dataset, target)
     X, _, _ = build_feature_matrix(as_fields(x))
     y_pred = model.predict(X)
 

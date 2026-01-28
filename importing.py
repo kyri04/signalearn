@@ -74,8 +74,35 @@ def sample_from_file(path):
         params["id"] = path.stem
     return Sample(params)
 
+def _npz_base_stem(path):
+    stem = path.stem
+    inner = Path(stem)
+    if inner.suffix in (".dat", ".txt", ".csv"):
+        return inner.stem
+    return stem
+
+def sample_from_npz(path):
+    with np.load(path, allow_pickle=True) as z:
+        params = {}
+        labels = {}
+        units = {}
+        for k in z.files:
+            v = z[k]
+            if isinstance(v, np.ndarray) and v.shape == ():
+                v = v.item()
+            params[k] = v
+            labels[k] = k
+            units[k] = ""
+
+    params["labels"] = labels
+    params["units"] = units
+    params["name"] = _npz_base_stem(path)
+    if "id" not in params:
+        params["id"] = params["name"]
+    return Sample(params)
+
 def _load_map(map_source):
-    df = pd.read_csv(map_source, sep=None, engine="python", dtype="object")
+    df = pd.read_csv(map_source, sep=None, engine="python", dtype="object", index_col=False)
     cols = list(df.columns)
     if not cols:
         return None, None
@@ -94,35 +121,67 @@ def _load_map(map_source):
         data[k] = row
     return key_col, data
 
-def load_data(directory, map=None):
+def load_data(directory, map=None, format="auto"):
     exts = (".dat", ".txt", ".csv")
     directory = Path(directory)
     map_key = None
     map_data = None
     if map is not None:
         map_key, map_data = _load_map(map)
+    map_keys_sorted = sorted(map_data.keys(), key=len, reverse=True) if map_data else None
     samples = []
-    for ext in exts:
-        for fp in sorted(directory.glob(f"*{ext}")):
-            sample = sample_from_file(fp)
-            if map_key and map_data:
-                row = None
-                if map_key in sample.fields:
-                    ident = sample.fields[map_key].values
-                    if isinstance(ident, np.ndarray):
-                        if ident.shape == ():
-                            ident = ident.item()
-                        elif ident.size > 0:
-                            ident = ident.ravel()[0]
-                    row = map_data.get(str(ident))
-                else:
-                    name = fp.stem
-                    for key in sorted(map_data.keys(), key=len, reverse=True):
-                        if key and key in name:
-                            row = map_data[key]
-                            break
-                if row:
-                    for k, v in row.items():
-                        setattr(sample, k, v)
-            samples.append(sample)
+
+    if format is None:
+        format = "auto"
+    fmt = format.lower() if isinstance(format, str) else format
+
+    if fmt == "auto":
+        chosen = {}
+        for ext in exts:
+            for fp in directory.glob(f"*{ext}"):
+                chosen.setdefault(fp.stem, fp)
+        for fp in directory.glob("*.npz"):
+            chosen[_npz_base_stem(fp)] = fp
+        files = sorted(chosen.values())
+    elif fmt == "npz":
+        files = sorted(directory.glob("*.npz"))
+    elif fmt in ("raw", "text"):
+        files = sorted(fp for ext in exts for fp in directory.glob(f"*{ext}"))
+    elif fmt in ("dat", "txt", "csv"):
+        files = sorted(directory.glob(f"*.{fmt}"))
+    else:
+        ext = fmt if isinstance(fmt, str) else ""
+        if ext.startswith("."):
+            files = sorted(directory.glob(f"*{ext}"))
+        else:
+            files = sorted(directory.glob(f"*.{ext}"))
+
+    for fp in files:
+        sample = sample_from_npz(fp) if fp.suffix == ".npz" else sample_from_file(fp)
+        if map_key and map_data:
+            row = None
+            if map_key in sample.fields:
+                ident = sample.fields[map_key].values
+                if isinstance(ident, np.ndarray):
+                    if ident.shape == ():
+                        ident = ident.item()
+                    elif ident.size > 0:
+                        ident = ident.ravel()[0]
+                row = map_data.get(str(ident))
+            else:
+                name = sample.name.values if "name" in sample.fields else fp.stem
+                if isinstance(name, np.ndarray):
+                    if name.shape == ():
+                        name = name.item()
+                    elif name.size > 0:
+                        name = name.ravel()[0]
+                name = str(name)
+                for key in map_keys_sorted:
+                    if key and key in name:
+                        row = map_data[key]
+                        break
+            if row:
+                for k, v in row.items():
+                    setattr(sample, k, v)
+        samples.append(sample)
     return Dataset(samples)

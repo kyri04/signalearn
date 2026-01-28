@@ -1,6 +1,6 @@
 from signalearn.utility import *
 from signalearn.classes import *
-from signalearn.learning_utility import build_feature_matrix, prepare_labels, prepare_groups, get_single_split
+from signalearn.learning_utility import build_feature_matrix, prepare_labels, prepare_groups, get_single_split, get
 import numpy as np
 
 def split(
@@ -10,6 +10,8 @@ def split(
     seed=42
 ):
     N = len(dataset.samples)
+    if group is not None and group._dataset is not dataset:
+        group = get(dataset, group)
     groups = prepare_groups(group)
     train_idx, test_idx = get_single_split(N, None, groups, test_size, seed)
     if groups is not None:
@@ -24,6 +26,9 @@ def classify(
     target,
     model
 ):
+    dataset = x[0]._dataset if isinstance(x, (list, tuple)) else x._dataset
+    if target._dataset is not dataset:
+        target = get(dataset, target)
     X, _, _ = build_feature_matrix(as_fields(x))
     y = prepare_labels(target)
     model.fit(X, y)
@@ -34,6 +39,9 @@ def regress(
     target,
     model
 ):
+    dataset = x[0]._dataset if isinstance(x, (list, tuple)) else x._dataset
+    if target._dataset is not dataset:
+        target = get(dataset, target)
     X, _, _ = build_feature_matrix(as_fields(x))
     y = np.array([f.values for f in target.fields], dtype=float)
     model.fit(X, y)
@@ -63,16 +71,18 @@ def reduce(
     dataset = y_fields[0]._dataset
     X, _, _ = build_feature_matrix(y_fields)
     Z = model.fit_transform(X)
-    prefix = snake(model.__class__.__name__)
+    prefix = "component"
     samples = []
     for i, sample in enumerate(dataset.samples):
-        updates = {}
+        updates = {"id": sample.fields["id"].values}
+        labels = {}
+        units = {}
         for j in range(Z.shape[1]):
             attr = f"{prefix}{j+1}"
             updates[attr] = Z[i, j]
-        new = new_sample(sample, updates)
-        for j in range(Z.shape[1]):
-            attr = f"{prefix}{j+1}"
-            new.fields[attr].label = pretty(attr)
-        samples.append(new)
+            labels[attr] = f"Component {j+1}"
+            units[attr] = ""
+        updates["labels"] = labels
+        updates["units"] = units
+        samples.append(Sample(updates))
     return Dataset(samples)

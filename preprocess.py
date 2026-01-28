@@ -2,7 +2,10 @@ import random
 import numpy as np
 from collections import defaultdict
 from scipy.interpolate import interp1d
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
 from signalearn.classes import Dataset, Sample
+from signalearn.general_utility import snake, pretty_func
 from signalearn.utility import new_sample
 
 def sample(dataset, f=0.05):
@@ -10,29 +13,15 @@ def sample(dataset, f=0.05):
     sampled = random.sample(dataset.samples, sample_size)
     return Dataset([new_sample(s) for s in sampled])
 
-def interpolate(x, y, n=50):
-    dataset = x._dataset
-    x_name = x.name
-    y_name = y.name
-    samples = []
-    for sample, x_field, y_field in zip(dataset.samples, x.fields, y.fields):
-        x_vals = np.asarray(x_field.values, dtype=float)
-        y_vals = np.asarray(y_field.values, dtype=float)
-        mask = np.isfinite(x_vals) & np.isfinite(y_vals)
-        x_vals, y_vals = x_vals[mask], y_vals[mask]
-        if x_vals.size < 2:
-            continue
-        f = interp1d(x_vals, y_vals, kind='linear', fill_value="extrapolate")
-        x_uniform = np.linspace(x_vals[0], x_vals[-1], n)
-        y_uniform = f(x_uniform)
-        samples.append(new_sample(sample, {x_name: x_uniform, y_name: y_uniform}))
-    return Dataset(samples)
-
 def trim(x, amount, mode='both'):
     mode = mode.lower()
     dataset = x._dataset
     samples = []
-    for sample, x_field in zip(dataset.samples, x.fields):
+    x_name = x.name
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
         x_vals = np.asarray(x_field.values, dtype=float)
         orig_len = x_vals.shape[0]
         left = x_vals[0]
@@ -43,36 +32,56 @@ def trim(x, amount, mode='both'):
             right -= amount
         mask = (x_vals >= left) & (x_vals <= right)
         updates = {}
+        labels = {}
+        units = {}
         for name, field in sample.fields.items():
             arr = np.asarray(field.values)
             if arr.ndim >= 1 and arr.shape[0] == orig_len:
                 updates[name] = arr[mask]
-        samples.append(new_sample(sample, updates))
+                labels[name] = field.label
+                units[name] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
     return Dataset(samples)
 
 def select(x, start, end):
     dataset = x._dataset
     samples = []
-    for sample, x_field in zip(dataset.samples, x.fields):
+    x_name = x.name
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
         x_vals = np.asarray(x_field.values, dtype=float)
         orig_len = x_vals.shape[0]
         mask = (x_vals >= start) & (x_vals <= end)
         updates = {}
+        labels = {}
+        units = {}
         for name, field in sample.fields.items():
             arr = np.asarray(field.values)
             if arr.ndim >= 1 and arr.shape[0] == orig_len:
                 updates[name] = arr[mask]
-        samples.append(new_sample(sample, updates))
+                labels[name] = field.label
+                units[name] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
     return Dataset(samples)
 
-def resample(x, rate):
-    rate = float(rate)
-    step = 1.0 / rate
+def resample(x, rate=None, n=None):
+    if n is not None:
+        n = int(n)
+    else:
+        rate = float(rate)
+        step = 1.0 / rate
     eps = np.finfo(float).eps
     dataset = x._dataset
     x_name = x.name
     samples = []
-    for sample, x_field in zip(dataset.samples, x.fields):
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
         x_arr = np.asarray(x_field.values, dtype=float).ravel()
         orig_len = x_arr.shape[0]
         mask = np.isfinite(x_arr)
@@ -86,12 +95,20 @@ def resample(x, rate):
             if not np.all(dup):
                 idx = idx[dup]
                 x_valid = x_valid[dup]
-        span = x_valid[-1] - x_valid[0]
-        n_samples = max(2, int(np.floor(span * rate)) + 1)
-        new_x = x_valid[0] + np.arange(n_samples) * step
-        if new_x[-1] < x_valid[-1] - eps:
-            new_x = np.append(new_x, x_valid[-1])
+
+        if n is not None:
+            if n < 2:
+                n = 2
+            new_x = np.linspace(x_valid[0], x_valid[-1], n)
+        else:
+            span = x_valid[-1] - x_valid[0]
+            n_samples = max(2, int(np.floor(span * rate)) + 1)
+            new_x = x_valid[0] + np.arange(n_samples) * step
+            if new_x[-1] < x_valid[-1] - eps:
+                new_x = np.append(new_x, x_valid[-1])
         updates = {x_name: new_x}
+        labels = {x_name: x_field.label}
+        units = {x_name: x_field.unit}
         for attr, field in sample.fields.items():
             if attr == x_name:
                 continue
@@ -110,13 +127,20 @@ def resample(x, rate):
                 fill_value="extrapolate"
             )
             updates[attr] = interp_func(new_x)
-        samples.append(new_sample(sample, updates))
+            labels[attr] = field.label
+            units[attr] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
     return Dataset(samples)
 
 def window(x, duration, overlap=0.0, allow_partial=False):
     dataset = x._dataset
+    x_name = x.name
     windows = []
-    for sample, x_field in zip(dataset.samples, x.fields):
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
         x_vals = np.asarray(x_field.values, dtype=float).ravel()
         n = x_vals.size
         dx = np.diff(x_vals)
@@ -139,15 +163,19 @@ def window(x, duration, overlap=0.0, allow_partial=False):
             if end - start <= 1:
                 break
             updates = {}
+            labels = {}
+            units = {}
             for attr, field in sample.fields.items():
                 arr = np.asarray(field.values)
                 if arr.ndim >= 1 and arr.shape[0] == n:
                     updates[attr] = arr[start:end]
-            parent = sample.fields.get("name")
-            parent_id = parent.values if parent is not None else None
+                    labels[attr] = field.label
+                    units[attr] = field.unit
             updates["window_index"] = window_idx
-            updates["name"] = f"{parent_id}_w{window_idx}"
-            windows.append(new_sample(sample, updates))
+            labels["window_index"] = "Window Index"
+            units["window_index"] = ""
+            params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+            windows.append(Sample(params))
             window_idx += 1
             start += step
     return Dataset(windows)
@@ -155,10 +183,98 @@ def window(x, duration, overlap=0.0, allow_partial=False):
 def func(y, func=np.log):
     dataset = y._dataset
     y_name = y.name
+    out_name = f"{snake(func.__name__)}_{y_name}"
     samples = []
-    for sample, y_field in zip(dataset.samples, y.fields):
-        y_vals = y_field.values
-        samples.append(new_sample(sample, {y_name: func(y_vals)}))
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        params = {"id": sample.fields["id"].values, out_name: func(y_field.values)}
+        params["labels"] = {out_name: pretty_func(y_field.label or y_name, func)}
+        params["units"] = {out_name: y_field.unit}
+        samples.append(Sample(params))
+    return Dataset(samples)
+
+def normalise(y):
+    dataset = y._dataset
+    y_name = y.name
+    out_name = f"norm_{y_name}"
+    samples = []
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        y_vals = np.asarray(y_field.values, dtype=float)
+        total = float(np.sum(y_vals))
+        if total <= 0 or not np.isfinite(total):
+            continue
+        params = {"id": sample.fields["id"].values, out_name: y_vals / total}
+        params["labels"] = {out_name: f"Normalised {y_field.label or y_name}"}
+        params["units"] = {out_name: ""}
+        samples.append(Sample(params))
+    return Dataset(samples)
+
+def baseline(y, lam=1e5, p=0.01, niter=10):
+    dataset = y._dataset
+    y_name = y.name
+    out_name = f"{y_name}_baseline"
+    cache = {}
+    samples = []
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        y_vals = np.asarray(y_field.values, dtype=float).ravel()
+        n = int(y_vals.size)
+        if n < 3:
+            z = y_vals.copy()
+            params = {"id": sample.fields["id"].values, out_name: z}
+            params["labels"] = {out_name: f"{(y_field.label or y_name)} Baseline"}
+            params["units"] = {out_name: y_field.unit}
+            samples.append(Sample(params))
+            continue
+        if n not in cache:
+            D = sparse.diags([1.0, -2.0, 1.0], [0, 1, 2], shape=(n - 2, n))
+            cache[n] = D.T @ D
+        DTD = cache[n]
+        w = np.ones(n, dtype=float)
+        for _ in range(int(niter)):
+            W = sparse.spdiags(w, 0, n, n)
+            Z = W + float(lam) * DTD
+            z = spsolve(Z, w * y_vals)
+            w = float(p) * (y_vals > z) + (1.0 - float(p)) * (y_vals <= z)
+
+        params = {"id": sample.fields["id"].values, out_name: z}
+        params["labels"] = {out_name: f"{(y_field.label or y_name)} Baseline"}
+        params["units"] = {out_name: y_field.unit}
+        samples.append(Sample(params))
+    return Dataset(samples)
+
+def subtract(a, b):
+    out_name = a.name
+    a_ds = a._dataset
+    b_ds = b._dataset
+    b_map = {}
+    for s in b_ds.samples:
+        if b.name not in s.fields:
+            continue
+        b_map[str(s.fields["id"].values)] = s.fields[b.name].values
+
+    samples = []
+    for s in a_ds.samples:
+        a_field = s.fields.get(out_name)
+        if a_field is None:
+            continue
+        key = str(s.fields["id"].values)
+        if key not in b_map:
+            continue
+        res = np.asarray(a_field.values, dtype=float) - np.asarray(b_map[key], dtype=float)
+        params = {"id": s.fields["id"].values, out_name: res}
+        a_label = a_field.label or out_name
+        b_label = b.label or b.name
+        params["labels"] = {out_name: f"{a_label} - {b_label}"}
+        params["units"] = {out_name: a_field.unit}
+        samples.append(Sample(params))
     return Dataset(samples)
 
 def filter(x, val, includes=True):
@@ -176,6 +292,53 @@ def filter(x, val, includes=True):
             samples.append(new_sample(sample))
     return Dataset(samples)
 
+def between(x, min=None, max=None):
+    dataset = x._dataset
+    samples = []
+    for sample, field in zip(dataset.samples, x.fields):
+        v = field.values
+        if v is None or isinstance(v, (str, bytes)) or isinstance(v, (list, tuple, np.ndarray)):
+            continue
+        v = float(v)
+        if min is not None and v < float(min):
+            continue
+        if max is not None and v > float(max):
+            continue
+        samples.append(new_sample(sample))
+    return Dataset(samples)
+
+def where(x, condition):
+    dataset = x._dataset
+    samples = []
+    for sample, field in zip(dataset.samples, x.fields):
+        if condition(np.asarray(field.values)):
+            samples.append(new_sample(sample))
+    return Dataset(samples)
+
+def concat(datasets):
+    samples = []
+    for i, dataset in enumerate(datasets):
+        src = f"dataset{i}"
+        for sample in dataset.samples:
+            samples.append(new_sample(sample, {"source": src}))
+    return Dataset(samples)
+
+def take(dataset, ids):
+    if hasattr(ids, "fields"):
+        wanted = {str(f.values) for f in ids.fields}
+    elif isinstance(ids, (list, tuple, set, np.ndarray)):
+        wanted = {str(v) for v in ids}
+    else:
+        wanted = {str(ids)}
+
+    samples = []
+    for sample in dataset.samples:
+        if "id" not in sample.fields:
+            continue
+        if str(sample.fields["id"].values) in wanted:
+            samples.append(new_sample(sample))
+    return Dataset(samples)
+
 def combine(match):
     dataset = match._dataset
     match_name = match.name
@@ -190,14 +353,14 @@ def combine(match):
         if len(grp) < 2:
             continue
 
-        params = {match_name: k}
+        params = {"id": str(k), match_name: k}
         name_vals = []
         for p in grp:
             if "name" in p.fields:
                 name_vals.append(str(p.fields["name"].values))
         params["name"] = "+".join(sorted(set(name_vals))) if name_vals else str(k)
 
-        meta = {"name", match_name}
+        meta = {"id", "name", match_name}
         attrs = set()
         for p in grp:
             attrs.update(a for a in p.fields.keys() if a not in meta)

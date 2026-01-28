@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
-from signalearn.classes import Sample
+from signalearn.classes import Sample, Field, FieldCollection
 from signalearn.utility import as_fields
 
 def clf_kwargs(y_true):
@@ -51,10 +51,29 @@ def build_feature_matrix(y_attr):
 def first(x):
     return x[0] if isinstance(x, (list, tuple)) else x
 
+def _id_map(dataset, attr):
+    out = {}
+    for s in dataset.samples:
+        if "id" not in s.fields or attr not in s.fields:
+            continue
+        out[str(s.fields["id"].values)] = s.fields[attr]
+    return out
+
+def _align(dataset, fc):
+    if fc._dataset is dataset:
+        return getattr(dataset, fc.name)
+    src = fc._dataset
+    m = _id_map(src, fc.name)
+    fields = []
+    for s in dataset.samples:
+        f = m[str(s.fields["id"].values)]
+        fields.append(Field(f.values, label=f.label, unit=f.unit, name=fc.name))
+    return FieldCollection(fields, name=fc.name, dataset=dataset)
+
 def get(dataset, x):
     if isinstance(x, (list, tuple)):
-        return [getattr(dataset, fc.name) for fc in x]
-    return getattr(dataset, x.name)
+        return [get(dataset, fc) for fc in x]
+    return _align(dataset, x)
 
 def values(x):
     if isinstance(x, (list, tuple)):

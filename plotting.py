@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.legend_handler import HandlerTuple
+from matplotlib.patches import Patch
 from sklearn.metrics import roc_curve, auc
 from signalearn.utility import *
 
@@ -12,16 +14,181 @@ def plot_signal(x, y):
     fig, ax = plt.subplots()
 
     xlabel,xunit = get_labels(x)
-    ylabel,yunit = get_labels(y)
+    y_list = list(y) if isinstance(y, (list, tuple)) else [y]
+    ylabel,yunit = get_labels(y_list[0])
 
     if xunit:
         xlabel = f"{xlabel} ({xunit})"
     if yunit:
         ylabel = f"{ylabel} ({yunit})"
 
-    ax.plot(x, y, lw=1)
+    if len(y_list) > 1:
+        for yi in y_list:
+            lab = getattr(yi, "alias", None) or get_labels(yi)[0]
+            ax.plot(x, yi, lw=1, label=lab)
+        ax.legend()
+    else:
+        ax.plot(x, y_list[0], lw=1)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    if not xunit:
+        ax.tick_params(axis="x", which="both", labelbottom=False)
+    if not yunit:
+        ax.tick_params(axis="y", which="both", labelleft=False)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_mean(x, y):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    xlabel, xunit = get_labels(x)
+    y_list = list(y) if isinstance(y, (list, tuple)) else [y]
+    ylabel, yunit = get_labels(y_list[0])
+    yunits = [get_labels(yi)[1] for yi in y_list]
+    if not all(u == yunits[0] for u in yunits):
+        yunit = ""
+
+    if xunit:
+        xlabel = f"{xlabel} ({xunit})"
+    if yunit:
+        ylabel = f"{ylabel} ({yunit})"
+
+    x_vals = np.asarray(x.fields[0].values if hasattr(x, "fields") else x.values, dtype=float).ravel()
+    line_handles = []
+    band_colors = []
+    for yi in y_list:
+        y_vals = np.asarray([np.asarray(f.values, dtype=float).ravel() for f in yi.fields], dtype=float)
+        mean = np.mean(y_vals, axis=0)
+        std = np.std(y_vals, axis=0)
+        lo = mean - std
+        hi = mean + std
+        lab = getattr(yi, "alias", None) or get_labels(yi)[0]
+        line = ax.plot(x_vals, mean, label=f"{lab} Mean")[0]
+        line_handles.append(line)
+        band_colors.append(line.get_color())
+        ax.fill_between(x_vals, lo, hi, color=line.get_color(), alpha=0.15, label="_nolegend_")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if not xunit:
+        ax.tick_params(axis="x", which="both", labelbottom=False)
+    if not yunit:
+        ax.tick_params(axis="y", which="both", labelleft=False)
+    band_handles = tuple(Patch(facecolor=c, edgecolor="none", alpha=0.15) for c in band_colors)
+    band_handle = band_handles[0] if len(band_handles) == 1 else band_handles
+    handles = line_handles + [band_handle]
+    labels = [h.get_label() for h in line_handles] + ["±1 Std"]
+    handler_map = {tuple: HandlerTuple(ndivide=None)} if isinstance(band_handle, tuple) else None
+    ax.legend(handles=handles, labels=labels, handler_map=handler_map)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_median(x, y):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    xlabel, xunit = get_labels(x)
+    y_list = list(y) if isinstance(y, (list, tuple)) else [y]
+    ylabel, yunit = get_labels(y_list[0])
+    yunits = [get_labels(yi)[1] for yi in y_list]
+    if not all(u == yunits[0] for u in yunits):
+        yunit = ""
+
+    if xunit:
+        xlabel = f"{xlabel} ({xunit})"
+    if yunit:
+        ylabel = f"{ylabel} ({yunit})"
+
+    x_vals = np.asarray(x.fields[0].values if hasattr(x, "fields") else x.values, dtype=float).ravel()
+    line_handles = []
+    band_colors = []
+    for yi in y_list:
+        y_vals = np.asarray([np.asarray(f.values, dtype=float).ravel() for f in yi.fields], dtype=float)
+        median = np.median(y_vals, axis=0)
+        q25 = np.percentile(y_vals, 25, axis=0)
+        q75 = np.percentile(y_vals, 75, axis=0)
+        lab = getattr(yi, "alias", None) or get_labels(yi)[0]
+        line = ax.plot(x_vals, median, label=f"{lab} Median")[0]
+        line_handles.append(line)
+        band_colors.append(line.get_color())
+        ax.fill_between(x_vals, q25, q75, color=line.get_color(), alpha=0.15, label="_nolegend_")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if not xunit:
+        ax.tick_params(axis="x", which="both", labelbottom=False)
+    if not yunit:
+        ax.tick_params(axis="y", which="both", labelleft=False)
+    band_handles = tuple(Patch(facecolor=c, edgecolor="none", alpha=0.15) for c in band_colors)
+    band_handle = band_handles[0] if len(band_handles) == 1 else band_handles
+    handles = line_handles + [band_handle]
+    labels = [h.get_label() for h in line_handles] + ["IQR"]
+    handler_map = {tuple: HandlerTuple(ndivide=None)} if isinstance(band_handle, tuple) else None
+    ax.legend(handles=handles, labels=labels, handler_map=handler_map)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_scatter(x, y):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    xlabel, xunit = get_labels(x)
+    ylabel, yunit = get_labels(y)
+
+    if xunit:
+        xlabel = f"{xlabel} ({xunit})"
+    if yunit:
+        ylabel = f"{ylabel} ({yunit})"
+
+    xv = np.asarray([f.values for f in x.fields], dtype=float)
+    yv = np.asarray([f.values for f in y.fields], dtype=float)
+    ax.scatter(xv, yv, s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if not xunit:
+        ax.tick_params(axis="x", which="both", labelbottom=False)
+    if not yunit:
+        ax.tick_params(axis="y", which="both", labelleft=False)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_confusion_matrix(predictions):
+    plt.close('all')
+    fig, ax = plt.subplots()
+    ax.grid(False)
+
+    y_true = np.asarray([f.values for f in predictions.y_true.fields], dtype=object)
+    y_pred = np.asarray([f.values for f in predictions.y_pred.fields], dtype=object)
+
+    labels = np.unique(np.concatenate([y_true, y_pred], axis=0))
+    idx = {lab: i for i, lab in enumerate(labels.tolist())}
+
+    cm = np.zeros((labels.size, labels.size), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        cm[idx[t], idx[p]] += 1
+
+    im = ax.imshow(cm, cmap="Blues")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(np.arange(labels.size))
+    ax.set_yticks(np.arange(labels.size))
+    ax.set_xticklabels([str(l) for l in labels], rotation=45, ha="right")
+    ax.set_yticklabels([str(l) for l in labels])
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+
+    vmax = int(cm.max()) if cm.size else 0
+    thresh = vmax / 2.0 if vmax else 0.0
+    for i in range(labels.size):
+        for j in range(labels.size):
+            v = int(cm[i, j])
+            ax.text(j, i, str(v), ha="center", va="center", color="white" if v > thresh else "black")
 
     fig.tight_layout()
     return fig, ax
@@ -65,15 +232,16 @@ def plot_roc(predictions, by=None):
             continue
         ax.plot(fpr, tpr, lw=1.0, alpha=0.25, color="0.75")
 
-    ax.plot(best[2], best[3], lw=2.0, color="green", label=f"Best AUC={best[1]:.3f}")
-    ax.plot(worst[2], worst[3], lw=2.0, color="red", label=f"Worst AUC={worst[1]:.3f}")
-    ax.plot(grid, mean_tpr, lw=2.0, color="black", label=f"Mean AUC={mean_auc:.3f}")
+    ax.plot(best[2], best[3], color="green", label=f"Best AUC={best[1]:.3f}")
+    ax.plot(worst[2], worst[3], color="red", label=f"Worst AUC={worst[1]:.3f}")
+    ax.plot(grid, mean_tpr, color="black", label=f"Mean AUC={mean_auc:.3f}")
 
     ax.plot([0, 1], [0, 1], ls="--", lw=1, color="0.5")
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
+    pad = 0.051
+    ax.set_xlim(-pad, 1 + pad)
+    ax.set_ylim(-pad, 1 + pad)
     ax.legend(loc="lower right")
 
     fig.tight_layout()

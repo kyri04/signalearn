@@ -2,11 +2,12 @@ from signalearn.general_utility import *
 from signalearn.utility import *
 
 class Field:
-    def __init__(self, values, label=None, unit=None, name=None):
+    def __init__(self, values, label=None, unit=None, name=None, alias=None):
         self.values = values
         self.label = label
         self.unit = unit
         self.name = name
+        self.alias = alias
 
     def __array__(self, dtype=None):
         return np.asarray(self.values, dtype=dtype) if dtype is not None else np.asarray(self.values)
@@ -77,6 +78,21 @@ class FieldCollection:
         for f in self.fields:
             f.unit = value
 
+    @property
+    def alias(self):
+        if not self.fields:
+            return None
+        alias = self.fields[0].alias
+        for f in self.fields[1:]:
+            if f.alias != alias:
+                return None
+        return alias
+
+    @alias.setter
+    def alias(self, value):
+        for f in self.fields:
+            f.alias = value
+
     def __array__(self, dtype=None):
         arr = [np.asarray(f) for f in self.fields]
         return np.asarray(arr, dtype=dtype) if dtype is not None else np.asarray(arr)
@@ -84,7 +100,7 @@ class FieldCollection:
     def map(self, func):
         fields = []
         for f in self.fields:
-            fields.append(Field(func(f.values), label=f.label, unit=f.unit, name=f.name))
+            fields.append(Field(func(f.values), label=f.label, unit=f.unit, name=f.name, alias=f.alias))
         return FieldCollection(fields, name=self._name, dataset=self._dataset)
 
     def __iter__(self):
@@ -107,16 +123,18 @@ class Sample:
 
         labels = params.pop("labels", None)
         units = params.pop("units", None)
+        aliases = params.pop("aliases", None)
 
         for k, v in params.items():
             label = labels.get(k) if isinstance(labels, dict) else None
             unit = units.get(k) if isinstance(units, dict) else None
+            alias = aliases.get(k) if isinstance(aliases, dict) else None
             if isinstance(v, Field):
                 if v.name is None:
                     v.name = k
                 self._fields[k] = v
             else:
-                self._fields[k] = Field(v, label=label, unit=unit, name=k)
+                self._fields[k] = Field(v, label=label, unit=unit, name=k, alias=alias)
 
     @property
     def fields(self):
@@ -175,7 +193,7 @@ class Dataset:
             return
         if isinstance(value, FieldCollection):
             for sample, field in zip(self.samples, value.fields):
-                sample.fields[name] = Field(field.values, label=field.label, unit=field.unit, name=name)
+                sample.fields[name] = Field(field.values, label=field.label, unit=field.unit, name=name, alias=field.alias)
             return
         if isinstance(value, (list, tuple, np.ndarray)) and len(value) == len(self.samples):
             for sample, v in zip(self.samples, value):
