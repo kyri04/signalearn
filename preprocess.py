@@ -279,14 +279,16 @@ def subtract(a, b):
 
 def filter(x, val, includes=True):
     dataset = x._dataset
+    name = x.name
     if isinstance(val, str):
         vals = [val.lower()]
     else:
         vals = [v.lower() for v in val]
 
     samples = []
-    for sample, field in zip(dataset.samples, x.fields):
-        attr_val = str(field.values).lower()
+    for sample in dataset.samples:
+        field = sample.fields.get(name)
+        attr_val = str(field.values).lower() if field is not None else ""
         matched = any(v in attr_val for v in vals)
         if matched == includes:
             samples.append(new_sample(sample))
