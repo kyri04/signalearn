@@ -1,193 +1,409 @@
 import random
 import numpy as np
-from signalearn.general_utility import *
-from signalearn.utility import calculate_filtered
-from scipy.fft import *
+from collections import defaultdict
 from scipy.interpolate import interp1d
-from scipy.stats import zscore
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
+from signalearn.classes import Dataset, Sample
+from signalearn.general_utility import snake, pretty_func
+from signalearn.utility import new_sample
 
-import numpy as np
-from sklearn.mixture import GaussianMixture
-from sklearn.preprocessing import StandardScaler
-from numpy import trapz
+def sample(dataset, f=0.05):
+    sample_size = int(len(dataset) * f)
+    sampled = random.sample(dataset.samples, sample_size)
+    return Dataset([new_sample(s) for s in sampled])
 
-def sample(points, f=0.05):
-    
-    sample_size = int(len(points) * f)
-    sampled_points = random.sample(points, sample_size)
-    
-    return sampled_points
+def trim(x, amount, mode='both'):
+    mode = mode.lower()
+    dataset = x._dataset
+    samples = []
+    x_name = x.name
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
+        x_vals = np.asarray(x_field.values, dtype=float)
+        orig_len = x_vals.shape[0]
+        left = x_vals[0]
+        right = x_vals[-1]
+        if mode in {'front', 'both'}:
+            left += amount
+        if mode in {'back', 'both'}:
+            right -= amount
+        mask = (x_vals >= left) & (x_vals <= right)
+        updates = {}
+        labels = {}
+        units = {}
+        for name, field in sample.fields.items():
+            arr = np.asarray(field.values)
+            if arr.ndim >= 1 and arr.shape[0] == orig_len:
+                updates[name] = arr[mask]
+                labels[name] = field.label
+                units[name] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-def trim(points, percent=0.05, front=True, back=True, threshold=1e-8):
+def select(x, start, end):
+    dataset = x._dataset
+    samples = []
+    x_name = x.name
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
+        x_vals = np.asarray(x_field.values, dtype=float)
+        orig_len = x_vals.shape[0]
+        mask = (x_vals >= start) & (x_vals <= end)
+        updates = {}
+        labels = {}
+        units = {}
+        for name, field in sample.fields.items():
+            arr = np.asarray(field.values)
+            if arr.ndim >= 1 and arr.shape[0] == orig_len:
+                updates[name] = arr[mask]
+                labels[name] = field.label
+                units[name] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-    starts, ends = [], []
-    for point in points:
-        y = np.array(point.y)
-        nonzero = np.where(y > threshold)[0]
-        if nonzero.size > 0:
-            starts.append(nonzero[0])
-            ends.append(nonzero[-1] + 1)
-    if not starts or not ends:
-        return points
+def resample(x, rate=None, n=None):
+    if n is not None:
+        n = int(n)
+    else:
+        rate = float(rate)
+        step = 1.0 / rate
+    eps = np.finfo(float).eps
+    dataset = x._dataset
+    x_name = x.name
+    samples = []
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
+        x_arr = np.asarray(x_field.values, dtype=float).ravel()
+        orig_len = x_arr.shape[0]
+        mask = np.isfinite(x_arr)
+        idx = np.flatnonzero(mask)
+        x_valid = x_arr[idx]
+        order = np.argsort(x_valid)
+        idx = idx[order]
+        x_valid = x_valid[order]
+        if x_valid.size > 1:
+            dup = np.concatenate(([True], np.diff(x_valid) > eps))
+            if not np.all(dup):
+                idx = idx[dup]
+                x_valid = x_valid[dup]
 
-    global_start = max(starts)
-    global_end   = min(ends)
-    usable_len = global_end - global_start
+        if n is not None:
+            if n < 2:
+                n = 2
+            new_x = np.linspace(x_valid[0], x_valid[-1], n)
+        else:
+            span = x_valid[-1] - x_valid[0]
+            n_samples = max(2, int(np.floor(span * rate)) + 1)
+            new_x = x_valid[0] + np.arange(n_samples) * step
+            if new_x[-1] < x_valid[-1] - eps:
+                new_x = np.append(new_x, x_valid[-1])
+        updates = {x_name: new_x}
+        labels = {x_name: x_field.label}
+        units = {x_name: x_field.unit}
+        for attr, field in sample.fields.items():
+            if attr == x_name:
+                continue
+            arr = np.asarray(field.values)
+            if arr.ndim == 0 or arr.shape[0] != orig_len:
+                continue
+            if not np.issubdtype(arr.dtype, np.number):
+                continue
+            arr_valid = arr[idx]
+            interp_func = interp1d(
+                x_valid,
+                arr_valid,
+                axis=0,
+                kind='linear',
+                bounds_error=False,
+                fill_value="extrapolate"
+            )
+            updates[attr] = interp_func(new_x)
+            labels[attr] = field.label
+            units[attr] = field.unit
+        params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-    cut = int(usable_len * percent)
-    start = global_start + cut if front else global_start
-    end   = global_end - cut if back else global_end
+def window(x, duration, overlap=0.0, allow_partial=False):
+    dataset = x._dataset
+    x_name = x.name
+    windows = []
+    for sample in dataset.samples:
+        x_field = sample.fields.get(x_name)
+        if x_field is None:
+            continue
+        x_vals = np.asarray(x_field.values, dtype=float).ravel()
+        n = x_vals.size
+        dx = np.diff(x_vals)
+        dx = dx[np.isfinite(dx) & (dx > 0)]
+        dt = float(np.median(dx))
+        window_samples = max(1, int(round(duration / dt)))
+        if window_samples <= 1:
+            window_samples = 2
+        step = max(1, int(round(window_samples * (1 - overlap))))
+        if step <= 0:
+            step = 1
+        start = 0
+        window_idx = 0
+        while start < n:
+            end = start + window_samples
+            if end > n:
+                if not allow_partial:
+                    break
+                end = n
+            if end - start <= 1:
+                break
+            updates = {}
+            labels = {}
+            units = {}
+            for attr, field in sample.fields.items():
+                arr = np.asarray(field.values)
+                if arr.ndim >= 1 and arr.shape[0] == n:
+                    updates[attr] = arr[start:end]
+                    labels[attr] = field.label
+                    units[attr] = field.unit
+            updates["window_index"] = window_idx
+            labels["window_index"] = "Window Index"
+            units["window_index"] = ""
+            params = {"id": sample.fields["id"].values, **updates, "labels": labels, "units": units}
+            windows.append(Sample(params))
+            window_idx += 1
+            start += step
+    return Dataset(windows)
 
-    if end <= start:
-        start, end = global_start, global_end
+def func(y, func=np.log):
+    dataset = y._dataset
+    y_name = y.name
+    out_name = f"{snake(func.__name__)}_{y_name}"
+    samples = []
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        params = {"id": sample.fields["id"].values, out_name: func(y_field.values)}
+        params["labels"] = {out_name: pretty_func(y_field.label or y_name, func)}
+        params["units"] = {out_name: y_field.unit}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-    sl = slice(start, end)
+def normalise(y):
+    dataset = y._dataset
+    y_name = y.name
+    out_name = f"norm_{y_name}"
+    samples = []
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        y_vals = np.asarray(y_field.values, dtype=float)
+        total = float(np.sum(y_vals))
+        if total <= 0 or not np.isfinite(total):
+            continue
+        params = {"id": sample.fields["id"].values, out_name: y_vals / total}
+        params["labels"] = {out_name: f"Normalised {y_field.label or y_name}"}
+        params["units"] = {out_name: ""}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-    trimmed = []
-    for point in points:
-        new_params = point.__dict__.copy()
-        new_params["x"] = np.array(point.x)[sl]
-        new_params["y"] = np.array(point.y)[sl]
-        trimmed.append(point.__class__(new_params))
+def baseline(y, lam=1e5, p=0.01, niter=10):
+    dataset = y._dataset
+    y_name = y.name
+    out_name = f"{y_name}_baseline"
+    cache = {}
+    samples = []
+    for sample in dataset.samples:
+        y_field = sample.fields.get(y_name)
+        if y_field is None:
+            continue
+        y_vals = np.asarray(y_field.values, dtype=float).ravel()
+        n = int(y_vals.size)
+        if n < 3:
+            z = y_vals.copy()
+            params = {"id": sample.fields["id"].values, out_name: z}
+            params["labels"] = {out_name: f"{(y_field.label or y_name)} Baseline"}
+            params["units"] = {out_name: y_field.unit}
+            samples.append(Sample(params))
+            continue
+        if n not in cache:
+            D = sparse.diags([1.0, -2.0, 1.0], [0, 1, 2], shape=(n - 2, n))
+            cache[n] = D.T @ D
+        DTD = cache[n]
+        w = np.ones(n, dtype=float)
+        for _ in range(int(niter)):
+            W = sparse.spdiags(w, 0, n, n)
+            Z = W + float(lam) * DTD
+            z = spsolve(Z, w * y_vals)
+            w = float(p) * (y_vals > z) + (1.0 - float(p)) * (y_vals <= z)
 
-    return trimmed
+        params = {"id": sample.fields["id"].values, out_name: z}
+        params["labels"] = {out_name: f"{(y_field.label or y_name)} Baseline"}
+        params["units"] = {out_name: y_field.unit}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-def trim(points, num=3, front=True, back=True, threshold=1e-8):
+def subtract(a, b):
+    out_name = a.name
+    a_ds = a._dataset
+    b_ds = b._dataset
+    b_map = {}
+    for s in b_ds.samples:
+        if b.name not in s.fields:
+            continue
+        b_map[str(s.fields["id"].values)] = s.fields[b.name].values
 
-    starts, ends = [], []
-    for point in points:
-        y = np.array(point.y)
-        nonzero = np.where(y > threshold)[0]
-        if nonzero.size > 0:
-            starts.append(nonzero[0])
-            ends.append(nonzero[-1] + 1)
-    if not starts or not ends:
-        return points
+    samples = []
+    for s in a_ds.samples:
+        a_field = s.fields.get(out_name)
+        if a_field is None:
+            continue
+        key = str(s.fields["id"].values)
+        if key not in b_map:
+            continue
+        res = np.asarray(a_field.values, dtype=float) - np.asarray(b_map[key], dtype=float)
+        params = {"id": s.fields["id"].values, out_name: res}
+        a_label = a_field.label or out_name
+        b_label = b.label or b.name
+        params["labels"] = {out_name: f"{a_label} - {b_label}"}
+        params["units"] = {out_name: a_field.unit}
+        samples.append(Sample(params))
+    return Dataset(samples)
 
-    global_start = max(starts)
-    global_end   = min(ends)
-    usable_len = global_end - global_start
+def filter(x, val, includes=True):
+    dataset = x._dataset
+    name = x.name
+    if isinstance(val, str):
+        vals = [val.lower()]
+    else:
+        vals = [v.lower() for v in val]
 
-    start = global_start + num if front else global_start
-    end   = global_end - num if back else global_end
+    samples = []
+    for sample in dataset.samples:
+        field = sample.fields.get(name)
+        attr_val = str(field.values).lower() if field is not None else ""
+        matched = any(v in attr_val for v in vals)
+        if matched == includes:
+            samples.append(new_sample(sample))
+    return Dataset(samples)
 
-    if end <= start:
-        start, end = global_start, global_end
+def between(x, min=None, max=None):
+    dataset = x._dataset
+    samples = []
+    for sample, field in zip(dataset.samples, x.fields):
+        v = field.values
+        if v is None or isinstance(v, (str, bytes)) or isinstance(v, (list, tuple, np.ndarray)):
+            continue
+        v = float(v)
+        if min is not None and v < float(min):
+            continue
+        if max is not None and v > float(max):
+            continue
+        samples.append(new_sample(sample))
+    return Dataset(samples)
 
-    sl = slice(start, end)
+def where(x, condition):
+    dataset = x._dataset
+    samples = []
+    for sample, field in zip(dataset.samples, x.fields):
+        if condition(np.asarray(field.values)):
+            samples.append(new_sample(sample))
+    return Dataset(samples)
 
-    trimmed = []
-    for point in points:
-        new_params = point.__dict__.copy()
-        new_params["x"] = np.array(point.x)[sl]
-        new_params["y"] = np.array(point.y)[sl]
-        trimmed.append(point.__class__(new_params))
+def concat(datasets):
+    samples = []
+    for i, dataset in enumerate(datasets):
+        src = f"dataset{i}"
+        for sample in dataset.samples:
+            samples.append(new_sample(sample, {"source": src}))
+    return Dataset(samples)
 
-    return trimmed
+def take(dataset, ids):
+    if hasattr(ids, "fields"):
+        wanted = {str(f.values) for f in ids.fields}
+    elif isinstance(ids, (list, tuple, set, np.ndarray)):
+        wanted = {str(v) for v in ids}
+    else:
+        wanted = {str(ids)}
 
-def interpolate(points, n=50):
+    samples = []
+    for sample in dataset.samples:
+        if "id" not in sample.fields:
+            continue
+        if str(sample.fields["id"].values) in wanted:
+            samples.append(new_sample(sample))
+    return Dataset(samples)
 
-    interpolated_points = []
-    for point in points:
-        x = np.array(point.x, dtype=float)
-        y = np.array(point.y, dtype=float)
+def combine(match):
+    dataset = match._dataset
+    match_name = match.name
+    groups = defaultdict(list)
+    for sample, field in zip(dataset.samples, match.fields):
+        k = field.values
+        if k is not None:
+            groups[str(k)].append(sample)
 
-        mask = np.isfinite(x) & np.isfinite(y)
-        x, y = x[mask], y[mask]
-        if len(x) < 2:
+    out = []
+    for k, grp in groups.items():
+        if len(grp) < 2:
             continue
 
-        f = interp1d(x, y, kind='linear', fill_value="extrapolate")
-        x_uniform = np.linspace(x[0], y[-1], n)
-        y_uniform = f(x_uniform)
+        params = {"id": str(k), match_name: k}
+        name_vals = []
+        for p in grp:
+            if "name" in p.fields:
+                name_vals.append(str(p.fields["name"].values))
+        params["name"] = "+".join(sorted(set(name_vals))) if name_vals else str(k)
 
-        params = point.__dict__.copy()
-        params["x"] = x_uniform
-        params["y"] = y_uniform
-        interpolated_points.append(point.__class__(params))
+        meta = {"id", "name", match_name}
+        attrs = set()
+        for p in grp:
+            attrs.update(a for a in p.fields.keys() if a not in meta)
 
-    return interpolated_points
+        units_acc, labels_acc = {}, {}
 
-def remove_outliers(points, threshold=3.0, func=np.mean, method='zscore'):
-    if not points:
-        return []
+        for a in sorted(attrs):
+            vals = [p.fields[a].values for p in grp if a in p.fields]
 
-    values = np.array([func(p.y) for p in points], dtype=float)
+            arrays, scalars = [], []
+            for v in vals:
+                if isinstance(v, (str, bytes)) or np.isscalar(v):
+                    scalars.append(v)
+                else:
+                    arrays.append(np.asarray(v).ravel())
 
-    if method == 'zscore':
-        zs = zscore(values, nan_policy='omit')
-    elif method == 'mad':
-        median = np.nanmedian(values)
-        mad = np.nanmedian(np.abs(values - median))
-        if mad == 0:
-            return points
-        zs = 0.67449 * (values - median) / mad
-    else:
-        raise ValueError("method must be 'zscore' or 'mad'")
+            if arrays:
+                params[a] = np.concatenate(arrays, axis=0)
+            else:
+                if scalars and all(s == scalars[0] for s in scalars):
+                    params[a] = scalars[0]
+                else:
+                    seen = set()
+                    uniq = []
+                    for s in scalars:
+                        if s not in seen:
+                            seen.add(s)
+                            uniq.append(s)
+                    params[a] = uniq
 
-    filtered = [p for p, z in zip(points, zs) if np.abs(z) <= threshold]
+            for p in grp:
+                f = p.fields.get(a)
+                if f is None:
+                    continue
+                if f.unit is not None and a not in units_acc:
+                    units_acc[a] = f.unit
+                if f.label is not None and a not in labels_acc:
+                    labels_acc[a] = f.label
 
-    calculate_filtered(points, filtered)
+        params["units"] = units_acc
+        params["labels"] = labels_acc
+        out.append(Sample(params))
 
-    return filtered
-
-def gaussian_mix(points, tau=0.9):
-    feats, means = [], []
-    for p in points:
-        y = np.asarray(p.y, float)
-        y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
-        m = y.mean()
-        a = trapz(y)
-        s = y.std()
-        mx = y.max()
-
-        eps=1e-9
-        feats.append([np.log(m+eps), np.log(a+eps), s, mx])
-        means.append(m)
-
-    X = np.asarray(feats)
-    m = np.isfinite(X).all(axis=1)
-    X = X[m]
-    scaler = StandardScaler()
-    Xz = scaler.fit_transform(X)
-
-    gmm = GaussianMixture(n_components=2, random_state=42)
-    gmm.fit(Xz)
-    post = gmm.predict_proba(Xz)
-
-    empty_comp = np.argmin(gmm.means_[:, 1])
-    p_empty = post[:, empty_comp]
-
-    keep_mask = p_empty < tau
-    kept = [p for p, k in zip(points, keep_mask) if k]
-    dropped = [p for p, k in zip(points, keep_mask) if not k]
-
-    calculate_filtered(points, kept)
-
-    return kept, dropped
-
-def fourier(points):
-    for point in points:
-        N = len(point.y)
-
-        frequencies = rfftfreq(N, d=(point.x[1] - point.x[0]))
-        amplitudes = rfft(point.y) * 2.0 / N 
-
-        point.x = frequencies
-        point.y = amplitudes
-
-    return points
-
-def func_y(points, func=np.mean):
-
-    ys = np.array([p.y for p in points])
-    y = func(ys, axis=0)
-
-    return y
-
-def func_points(points, func=np.log):
-
-    for point in points:
-        point.y = func(point.y)
-
-    return points
+    return Dataset(out)

@@ -1,253 +1,92 @@
 from signalearn.utility import *
-from signalearn.preprocess import sample
 from signalearn.classes import *
-from signalearn.learning_utility import *
-from sklearn.metrics import confusion_matrix
+from signalearn.learning_utility import build_feature_matrix, prepare_labels, prepare_groups, get_single_split, get
 import numpy as np
 
-from signalearn.preprocess import func_y
-import copy
+def split(
+    dataset,
+    group=None,
+    test_size=0.2,
+    seed=42
+):
+    N = len(dataset.samples)
+    if group is not None and group._dataset is not dataset:
+        group = get(dataset, group)
+    groups = prepare_groups(group)
+    train_idx, test_idx = get_single_split(N, None, groups, test_size, seed)
+    if groups is not None:
+        assert set(groups[train_idx]).isdisjoint(set(groups[test_idx]))
+
+    train = Dataset([dataset.samples[i] for i in train_idx])
+    test = Dataset([dataset.samples[i] for i in test_idx])
+    return Split(train=train, test=test)
 
 def classify(
-    points,
-    label,
-    group=None,
-    classifier="rf",
-    test_size=0.2,
-    split_state=42,
-    agg_method='mean',
-    agg_group=None,
-    scale=False
+    x,
+    target,
+    model
 ):
+    dataset = x[0]._dataset if isinstance(x, (list, tuple)) else x._dataset
+    if target._dataset is not dataset:
+        target = get(dataset, target)
+    X, _, _ = build_feature_matrix(as_fields(x))
+    y = prepare_labels(target)
+    classes = np.unique(y)
+    label_to_int = {c: i for i, c in enumerate(classes.tolist())}
+    y_int = np.array([label_to_int[v] for v in y], dtype=np.int32)
+    model.fit(X, y_int)
+    model._signalearn_classes = classes
+    return model
 
-    N = len(points)
-
-    ys = np.array([point.y for point in points])
-    
-    labels = prepare_labels(points, label)
-    groups = prepare_groups(points, group)
-    agg_groups = prepare_groups(points, agg_group) if agg_group is not None else None
-
-    labels_encoded, encoder = encode(labels)
-    unique_labels = encoder.classes_
-    unique_labels_encoded = np.unique(labels_encoded)
-
-    train_idx, test_idx = get_single_split(N, labels_encoded, groups, test_size, split_state)
-
-    if groups is not None:
-        train_groups = set(groups[train_idx])
-        test_groups = set(groups[test_idx])
-        assert train_groups.isdisjoint(test_groups)
-
-    X_train_raw, X_test_raw = ys[train_idx], ys[test_idx]
-    y_train, y_test = labels_encoded[train_idx], labels_encoded[test_idx]
-
-    if(scale): X_train, X_test = standardize_train_test(X_train_raw, X_test_raw)
-    else: X_train, X_test = X_train_raw, X_test_raw
-
-    model = get_classifier(classifier)
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-    conf_matrix = confusion_matrix(y_test, y_pred, labels=unique_labels_encoded)
-
-    n_classes = len(unique_labels_encoded)
-    y_score = positive_class_scores(model, X_test, n_classes=n_classes)
-    if n_classes == 2 and y_score.ndim > 1:
-            y_score = y_score[:, 1]
-
-    accuracy, mean_specificity, mean_sensitivity, mean_precision, mean_recall, mean_f1 = calculate_metrics(conf_matrix)
-
-    feature_importances = get_feature_importances(model)
-
-    group_results_ns = None
-    if agg_groups is not None:
-        groups_test = agg_groups[test_idx]
-        group_eval = evaluate_group_level(
-            y_true=y_test,
-            y_score=y_score,
-            groups=groups_test,
-            unique_labels_encoded=unique_labels_encoded,
-            agg=agg_method,
-            threshold=0.5
-        )
-        group_results_ns = make_namespace(group_eval)
-
-    attributes = set(points[0].__dict__) - set(get_attributes(Series))
-    unique_counts = {a: count_unique(points, a) for a in sorted(attributes)}
-
-    res = Result(
-        set_volume=make_namespace({
-            "points": N,
-            "classes": len(unique_labels),
-            **unique_counts
-        }),
-        set_params=make_namespace({
-            "label": label,
-            "group": group,
-            "agg_group": agg_group if agg_group is not None else 'none',
-            "classifier": classifier,
-            "test_size": test_size,
-            "split_state": split_state,
-            "unique_labels": unique_labels,
-            "group_agg": agg_method
-        }),
-        set_results=make_namespace({
-            "accuracy": accuracy,
-            "specificity": mean_specificity,
-            "sensitivity": mean_sensitivity,
-            "precision": mean_precision,
-            "recall": mean_recall,
-            "f1": mean_f1,
-            "conf_matrix": conf_matrix,
-            "y_true": y_test,
-            "y_score": y_score,
-            "feature_importances": feature_importances
-        }),
-        set_group_results=group_results_ns
-    )
-
-    return res
-
-def shuffle_classify(
-    points, 
-    label, 
-    group=None, 
-    agg_group=None,
-    classifier='rf', 
-    test_size=0.2,
-    shuffles=5,
-    agg_method='mean',
-    scale=False
+def regress(
+    x,
+    target,
+    model
 ):
-    results = []
-    for rs in range(shuffles):
-        results.append(classify(
-            points=points, 
-            label = label, 
-            group = group, 
-            agg_group = agg_group,
-            classifier = classifier, 
-            test_size = test_size,  
-            split_state = rs,
-            agg_method = agg_method,
-            scale=scale))
-        
-    return results
+    dataset = x[0]._dataset if isinstance(x, (list, tuple)) else x._dataset
+    if target._dataset is not dataset:
+        target = get(dataset, target)
+    X, _, _ = build_feature_matrix(as_fields(x))
+    y = np.array([f.values for f in target.fields], dtype=float)
+    model.fit(X, y)
+    return model
 
-def attr_curve(
-    points, 
-    label, 
-    by_attribute,
-    group=None, 
-    agg_group=None,
-    classifier='rf', 
-    test_size=0.2,
-    split_state=42,
-    divisions=5,
-    start_val=0,
-    shuffles_per_split=None,
-    agg_method='mean',
-    scale=False
+def cluster(
+    y,
+    model,
 ):
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X, _, _ = build_feature_matrix(y_fields)
+    labels = model.fit_predict(X)
+    name = snake(model.__class__.__name__)
+    samples = []
+    for sample, label in zip(dataset.samples, labels):
+        new = new_sample(sample, {name: label})
+        new.fields[name].label = pretty(name)
+        samples.append(new)
+    return Dataset(samples)
 
-    rng = np.random.default_rng(split_state)
-
-    values = np.array([getattr(p, by_attribute) for p in points])
-    unique_vals = np.unique(values)
-    rng.shuffle(unique_vals)
-    n_unique = len(unique_vals)
-
-    if n_unique < 1:
-        return np.array([0], dtype=int), [np.nan]
-
-    start_k = start_val
-    counts = np.ceil(np.linspace(start_k, n_unique, divisions)).astype(int)
-    counts = np.unique(np.clip(counts, 1, n_unique))
-
-    results = []
-    for k in counts:
-        chosen = set(unique_vals[:k])
-        subset = [p for p in points if getattr(p, by_attribute) in chosen]
-
-        if (shuffles_per_split is not None) and (shuffles_per_split > 1):
-            res_list = shuffle_classify(
-                subset=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                shuffles=shuffles_per_split,
-                agg_method=agg_method,
-                scale=scale
-            )
-            results.append(combine_results(res_list))
-            
-        else:
-            res = classify(
-                points=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                split_state=split_state,
-                agg_method=agg_method,
-                scale=scale
-            )
-            results.append(res)
-
-    return results
-
-def data_curve(
-    points, 
-    label, 
-    group=None, 
-    agg_group=None,
-    classifier='rf', 
-    test_size=0.2,
-    split_state=42, 
-    divisions=5,
-    start_fraction=0.05,
-    shuffles_per_split=None,
-    agg_method='mean',
-    scale=False
+def reduce(
+    y,
+    model,
 ):
-
-    fractions = np.linspace(start_fraction, 1.0, divisions)
-    results = []
-
-    for frac in fractions:
-
-        subset = sample(points, frac)
-        if (shuffles_per_split is not None) and (shuffles_per_split > 1):
-            res_list = shuffle_classify(
-                points=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                shuffles=shuffles_per_split,
-                agg_method=agg_method,
-                scale=scale
-            )
-            res = combine_results(res_list)
-            results.append(res)
-            
-        else:
-            res = classify(
-                points=subset,
-                label=label,
-                group=group,
-                agg_group=agg_group,
-                classifier=classifier,
-                test_size=test_size,
-                split_state=split_state,
-                agg_method=agg_method,
-                scale=scale
-            )
-            results.append(res)
-
-    return results
+    y_fields = as_fields(y)
+    dataset = y_fields[0]._dataset
+    X, _, _ = build_feature_matrix(y_fields)
+    Z = model.fit_transform(X)
+    prefix = "component"
+    samples = []
+    for i, sample in enumerate(dataset.samples):
+        updates = {"id": sample.fields["id"].values}
+        labels = {}
+        units = {}
+        for j in range(Z.shape[1]):
+            attr = f"{prefix}{j+1}"
+            updates[attr] = Z[i, j]
+            labels[attr] = f"Component {j+1}"
+            units[attr] = ""
+        updates["labels"] = labels
+        updates["units"] = units
+        samples.append(Sample(updates))
+    return Dataset(samples)

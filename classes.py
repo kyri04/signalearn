@@ -1,88 +1,216 @@
-import numpy as np
-from numbers import Number
+from signalearn.general_utility import *
+from signalearn.utility import *
 
-class Series:
-    def __init__(self, parameters):
-        for k, v in parameters.items():
-            setattr(self, k, v)
+class Field:
+    def __init__(self, values, label=None, unit=None, name=None, alias=None):
+        self.values = values
+        self.label = label
+        self.unit = unit
+        self.name = name
+        self.alias = alias
 
-class Result:
-    def __init__(self, set_params, set_volume, set_results, set_group_results=None):
-        self.params = set_params
-        self.volume = set_volume
-        self.results = set_results
-        self.group_results = set_group_results
+    def __array__(self, dtype=None):
+        return np.asarray(self.values, dtype=dtype) if dtype is not None else np.asarray(self.values)
 
-    def format_params(self):
-        lines = ["PARAMETERS:"]
-        for k, v in vars(self.params).items():
-            lines.append(f"{k}: {v}")
-        return "\n".join(lines)
-    
-    def format_volume(self):
-        lines = ["VOLUME:"]
-        for k, v in vars(self.volume).items():
-            lines.append(f"{k}: {v}")
-        return "\n".join(lines)
+    def __iter__(self):
+        return iter(self.values)
 
-    def format_results(self, results, title="RESULTS:"):
+    def __len__(self):
+        return len(self.values)
 
-        def to_float(x):
-            if x is None:
+    def __getitem__(self, idx):
+        return self.values[idx]
+
+    def __getattr__(self, name):
+        if "values" not in self.__dict__:
+            raise AttributeError(name)
+        return getattr(self.values, name)
+
+class FieldCollection:
+    def __init__(self, fields, name=None, dataset=None):
+        self.fields = list(fields)
+        self._name = name
+        self._dataset = dataset
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        old = self._name
+        self._name = value
+        for f in self.fields:
+            f.name = value
+        if self._dataset is None or old is None or old == value:
+            return
+        for s in self._dataset.samples:
+            if old in s.fields:
+                s.fields[value] = s.fields.pop(old)
+
+    @property
+    def label(self):
+        if not self.fields:
+            return None
+        lbl = self.fields[0].label
+        for f in self.fields[1:]:
+            if f.label != lbl:
                 return None
-            try:
-                if isinstance(x, np.ndarray):
-                    if x.size == 0:
-                        return None
-                    x = x.ravel()[0]
-                if not isinstance(x, Number):
-                    x = float(x)
-                if isinstance(x, float) and np.isnan(x):
-                    return None
-                return float(x)
-            except Exception:
+        return lbl
+
+    @label.setter
+    def label(self, value):
+        for f in self.fields:
+            f.label = value
+
+    @property
+    def unit(self):
+        if not self.fields:
+            return None
+        unit = self.fields[0].unit
+        for f in self.fields[1:]:
+            if f.unit != unit:
                 return None
+        return unit
 
-        def pct(x):  v = to_float(x); return "N/A" if v is None else f"{v*100:.2f}%"
-        def num(x):  v = to_float(x); return "N/A" if v is None else f"{v:.2f}"
+    @unit.setter
+    def unit(self, value):
+        for f in self.fields:
+            f.unit = value
 
-        lines = [
-            f"{title}",
-            f"Accuracy: {pct(getattr(results, 'accuracy', None))}",
-            f"Precision: {pct(getattr(results, 'precision', None))}",
-            f"Recall: {pct(getattr(results, 'recall', None))}",
-            f"Specificity: {pct(getattr(results, 'specificity', None))}",
-            f"Sensitivity: {pct(getattr(results, 'sensitivity', None))}",
-            f"F1: {num(getattr(results, 'f1', None))}",
-            "",
-            self.display_confusion_matrix(getattr(results, 'conf_matrix', None)) or "",
-            ""
-        ]
-        return "\n".join(lines)
-    
-    def display_confusion_matrix(self, conf_matrix):
-        col_width = max(5, max(len(str(label)) for label in self.params.unique_labels))
-        row_header_width = max(len("Actual " + str(label)) for label in self.params.unique_labels)
-        output = []
-        header_width = len(self.params.unique_labels) * (col_width + 1) - 1
-        output.append(" " * (row_header_width + 1) + "Predicted".center(header_width))
-        output.append(" " * (row_header_width + 1) + " ".join(f"{label:^{col_width}}" for label in self.params.unique_labels))
-        for i, label in enumerate(self.params.unique_labels):
-            row_header = f"Actual {label}"
-            row_values = " ".join(f"{conf_matrix[i, j]:^{col_width}}" for j in range(len(self.params.unique_labels)))
-            output.append(f"{row_header:<{row_header_width}} " + row_values)
-        return "\n".join(output)
-    
-    def display_params(self): print(self.format_params())
-    def display_volume(self): print(self.format_volume())
-    def display_results(self): print(self.format_results(self.results, title="RESULTS:"))
-    def display_group_results(self): print(self.format_results(self.group_results, title="GROUP-LEVEL RESULTS:"))
-    def display(self):
-        self.display_params()
-        print()
-        self.display_volume()
-        print()
-        self.display_results()
-        if self.group_results:
-            print()
-            self.display_group_results()
+    @property
+    def alias(self):
+        if not self.fields:
+            return None
+        alias = self.fields[0].alias
+        for f in self.fields[1:]:
+            if f.alias != alias:
+                return None
+        return alias
+
+    @alias.setter
+    def alias(self, value):
+        for f in self.fields:
+            f.alias = value
+
+    def __array__(self, dtype=None):
+        arr = [np.asarray(f) for f in self.fields]
+        return np.asarray(arr, dtype=dtype) if dtype is not None else np.asarray(arr)
+
+    def map(self, func):
+        fields = []
+        for f in self.fields:
+            fields.append(Field(func(f.values), label=f.label, unit=f.unit, name=f.name, alias=f.alias))
+        return FieldCollection(fields, name=self._name, dataset=self._dataset)
+
+    def __iter__(self):
+        return iter(self.fields)
+
+    def __len__(self):
+        return len(self.fields)
+
+    def __getitem__(self, idx):
+        return self.fields[idx]
+
+class Sample:
+    def __init__(self, parameters=None, **kwargs):
+        object.__setattr__(self, "_fields", {})
+        params = {}
+        if parameters is not None:
+            params.update(parameters)
+        if kwargs:
+            params.update(kwargs)
+
+        labels = params.pop("labels", None)
+        units = params.pop("units", None)
+        aliases = params.pop("aliases", None)
+
+        for k, v in params.items():
+            label = labels.get(k) if isinstance(labels, dict) else None
+            unit = units.get(k) if isinstance(units, dict) else None
+            alias = aliases.get(k) if isinstance(aliases, dict) else None
+            if isinstance(v, Field):
+                if v.name is None:
+                    v.name = k
+                self._fields[k] = v
+            else:
+                self._fields[k] = Field(v, label=label, unit=unit, name=k, alias=alias)
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def __getattr__(self, name):
+        fields = object.__getattribute__(self, "_fields")
+        if name in fields:
+            return fields[name]
+        raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+            return
+        fields = object.__getattribute__(self, "_fields")
+        if isinstance(value, Field):
+            if value.name is None:
+                value.name = name
+            fields[name] = value
+        else:
+            fields[name] = Field(value, name=name)
+
+    def __dir__(self):
+        names = set(object.__dir__(self))
+        names.update(self._fields.keys())
+        return sorted(names)
+
+class Dataset:
+    def __init__(self, samples=None):
+        self.samples=samples
+        
+    def __len__(self):
+        return len(self.samples)
+
+    def __iter__(self):
+        return iter(self.samples)
+
+    def __getitem__(self, idx):
+        if isinstance(idx, slice):
+            return Dataset(self.samples[idx])
+        return self.samples[idx]
+
+    def __getattr__(self, name):
+        if "samples" not in self.__dict__:
+            raise AttributeError(name)
+        samples = object.__getattribute__(self, "samples")
+        fields = [s.fields[name] for s in samples if name in s.fields]
+        if not fields:
+            raise AttributeError(name)
+        return FieldCollection(fields, name=name, dataset=self)
+
+    def __setattr__(self, name, value):
+        if name.startswith("_") or name == "samples":
+            object.__setattr__(self, name, value)
+            return
+        if isinstance(value, FieldCollection):
+            for sample, field in zip(self.samples, value.fields):
+                sample.fields[name] = Field(field.values, label=field.label, unit=field.unit, name=name, alias=field.alias)
+            return
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) == len(self.samples):
+            for sample, v in zip(self.samples, value):
+                sample.fields[name] = Field(v, name=name)
+            return
+        for sample in self.samples:
+            sample.fields[name] = Field(value, name=name)
+
+    def __dir__(self):
+        names = set(object.__dir__(self))
+        for s in self.samples:
+            names.update(s.fields.keys())
+        return sorted(names)
+
+class Split:
+    __slots__ = ("train", "test")
+
+    def __init__(self, train, test):
+        self.train = train
+        self.test = test
