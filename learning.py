@@ -59,7 +59,8 @@ def cluster(
     dataset = y_fields[0]._dataset
     X, _, _ = build_feature_matrix(y_fields)
     labels = model.fit_predict(X)
-    name = snake(model.__class__.__name__)
+    # name = snake(model.__class__.__name__)
+    name = 'cluster'
     samples = []
     for sample, label in zip(dataset.samples, labels):
         new = new_sample(sample, {name: label})

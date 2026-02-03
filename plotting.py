@@ -132,9 +132,17 @@ def plot_median(x, y):
     fig.tight_layout()
     return fig, ax
 
-def plot_scatter(x, y):
+def plot_scatter(x, y, by=None):
     plt.close('all')
     fig, ax = plt.subplots()
+
+    if hasattr(x, "_dataset"):
+        from signalearn.learning_utility import get as align_get
+        dataset = x._dataset
+        if hasattr(y, "_dataset") and y._dataset is not dataset:
+            y = align_get(dataset, y)
+        if by is not None and hasattr(by, "_dataset") and by._dataset is not dataset:
+            by = align_get(dataset, by)
 
     xlabel, xunit = get_labels(x)
     ylabel, yunit = get_labels(y)
@@ -146,7 +154,35 @@ def plot_scatter(x, y):
 
     xv = np.asarray([f.values for f in x.fields], dtype=float)
     yv = np.asarray([f.values for f in y.fields], dtype=float)
-    ax.scatter(xv, yv, s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5)
+    if by is None:
+        ax.scatter(xv, yv, s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5)
+    else:
+        groups = np.asarray([f.values for f in by.fields], dtype=object)
+        group_list = groups.tolist()
+
+        def unique_order(vals):
+            out = []
+            for v in vals:
+                if not any(v == u for u in out):
+                    out.append(v)
+            return out
+
+        def sort_key(v):
+            if v is None:
+                return (2, "")
+            try:
+                f = float(v)
+                if np.isnan(f):
+                    return (2, "nan")
+                return (0, f)
+            except Exception:
+                return (1, str(v))
+
+        order = sorted(unique_order(group_list), key=sort_key)
+        for g in order:
+            mask = np.array([gv == g for gv in group_list], dtype=bool)
+            ax.scatter(xv[mask], yv[mask], s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5, label=str(g))
+        ax.legend()
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
