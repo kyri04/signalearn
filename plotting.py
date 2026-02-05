@@ -229,6 +229,25 @@ def plot_confusion_matrix(predictions):
     fig.tight_layout()
     return fig, ax
 
+def plot_predicted_vs_true(predictions):
+    plt.close('all')
+    fig, ax = plt.subplots()
+
+    y_true = np.asarray([f.values for f in predictions.y_true.fields], dtype=float)
+    y_pred = np.asarray([f.values for f in predictions.y_pred.fields], dtype=float)
+
+    ax.scatter(y_true, y_pred, s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5)
+
+    lo = float(np.nanmin([y_true.min(), y_pred.min()]))
+    hi = float(np.nanmax([y_true.max(), y_pred.max()]))
+    ax.plot([lo, hi], [lo, hi], color="0.4", lw=1)
+
+    ax.set_xlabel("True")
+    ax.set_ylabel("Predicted")
+
+    fig.tight_layout()
+    return fig, ax
+
 def plot_roc(predictions, by=None):
     plt.close('all')
     fig, ax = plt.subplots()
