@@ -7,13 +7,6 @@ from signalearn.general_utility import snake
 
 _header_re = re.compile(r"^\s*(?P<base>[^\[(]+?)\s*(?:\((?P<u1>[^()]*)\)|\[(?P<u2>[^\[\]]*)\])?\s*$")
 
-def _is_number(s):
-    try:
-        float(str(s))
-        return True
-    except Exception:
-        return False
-
 def _parse_header(h):
     m = _header_re.match(str(h))
     if not m:
@@ -25,17 +18,10 @@ def _parse_header(h):
     label = base if base else str(h)
     return name, unit.strip() if unit else None, label
 
-def _has_header(path):
-    df = pd.read_csv(path, sep=None, engine="python", comment="#", nrows=1, dtype="object")
-    cols = list(df.columns)
-    if not cols:
-        return False
-    return not all(_is_number(c) for c in cols)
-
-def _read_table(path):
-    has_header = _has_header(path)
-    header = 0 if has_header else None
-    df = pd.read_csv(path, sep=None, engine="python", comment="#", dtype="object", header=header)
+def _read_table(path, header=True):
+    has_header = bool(header)
+    header_row = 0 if has_header else None
+    df = pd.read_csv(path, sep=None, engine="python", comment="#", dtype="object", header=header_row)
     if not has_header:
         cols = [f"column{i}" for i in range(df.shape[1])]
         df.columns = cols
@@ -49,8 +35,8 @@ def _read_table(path):
         df.columns = cols
     return df, labels, units
 
-def sample_from_file(path):
-    df, labels, units = _read_table(path)
+def sample_from_file(path, header=True):
+    df, labels, units = _read_table(path, header=header)
     params = {}
     for c in df.columns:
         col = df[c]
@@ -121,7 +107,7 @@ def _load_map(map_source):
         data[k] = row
     return key_col, data
 
-def load_data(directory, map=None, format="auto"):
+def load_data(directory, map=None, format="auto", header=True):
     exts = (".dat", ".txt", ".csv")
     directory = Path(directory)
     map_key = None
@@ -157,7 +143,7 @@ def load_data(directory, map=None, format="auto"):
             files = sorted(directory.glob(f"*.{ext}"))
 
     for fp in files:
-        sample = sample_from_npz(fp) if fp.suffix == ".npz" else sample_from_file(fp)
+        sample = sample_from_npz(fp) if fp.suffix == ".npz" else sample_from_file(fp, header=header)
         if map_key and map_data:
             row = None
             if map_key in sample.fields:
