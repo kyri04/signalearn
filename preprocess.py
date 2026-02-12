@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 from signalearn.classes import Dataset, Sample
-from signalearn.general_utility import snake, pretty_func
+from signalearn.general_utility import pretty_func
 from signalearn.utility import new_sample
 
 def sample(dataset, f=0.05):
@@ -183,7 +183,7 @@ def window(x, duration, overlap=0.0, allow_partial=False):
 def func(y, func=np.log):
     dataset = y._dataset
     y_name = y.name
-    out_name = f"{snake(func.__name__)}_{y_name}"
+    out_name = y_name
     samples = []
     for sample in dataset.samples:
         y_field = sample.fields.get(y_name)
@@ -198,7 +198,7 @@ def func(y, func=np.log):
 def normalise(y):
     dataset = y._dataset
     y_name = y.name
-    out_name = f"norm_{y_name}"
+    out_name = y_name
     samples = []
     for sample in dataset.samples:
         y_field = sample.fields.get(y_name)
@@ -217,7 +217,7 @@ def normalise(y):
 def baseline(y, lam=1e5, p=0.01, niter=10):
     dataset = y._dataset
     y_name = y.name
-    out_name = f"{y_name}_baseline"
+    out_name = y_name
     cache = {}
     samples = []
     for sample in dataset.samples:
