@@ -1,4 +1,5 @@
 import numpy as np
+from collections import OrderedDict
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -12,7 +13,16 @@ from sklearn.metrics import (
 from sklearn.base import clone
 
 from signalearn.utility import as_fields
-from signalearn.learning_utility import build_feature_matrix, prepare_labels, clf_kwargs, first, eval_once, values, get
+from signalearn.learning_utility import (
+    build_feature_matrix,
+    prepare_labels,
+    clf_kwargs,
+    first,
+    eval_once,
+    values,
+    get,
+    resolve_group,
+)
 from signalearn.learning import split
 from signalearn.classes import Dataset, Sample
 
@@ -42,6 +52,57 @@ def predict(x, target, model):
         row = {"y_true": y_true[i], "y_pred": y_pred[i], "id": id_vals[i]}
         if y_score is not None:
             row["y_score"] = y_score[i]
+        out.append(Sample(row))
+
+    return Dataset(out)
+
+def aggregate(predictions, group, rule):
+    if len(predictions.samples) == 0:
+        return Dataset([])
+
+    group_name, group_vals = resolve_group(predictions, group)
+    y_true_vals = values(predictions.y_true)
+    y_pred_vals = values(predictions.y_pred)
+    y_score_vals = values(predictions.y_score) if hasattr(predictions, "y_score") else None
+
+    reserved = {"id", "y_true", "y_pred", "y_score", group_name}
+    meta_names = []
+    for sample in predictions.samples:
+        for field_name in sample.fields.keys():
+            if field_name in reserved or field_name in meta_names:
+                continue
+            meta_names.append(field_name)
+
+    buckets = OrderedDict()
+    for i, sample in enumerate(predictions.samples):
+        meta_key = tuple(sample.fields[n].values if n in sample.fields else None for n in meta_names)
+        key = (meta_key, group_vals[i])
+        if key not in buckets:
+            buckets[key] = {"y_true": [], "y_pred": [], "y_score": []}
+        buckets[key]["y_true"].append(y_true_vals[i])
+        buckets[key]["y_pred"].append(y_pred_vals[i])
+        if y_score_vals is not None:
+            buckets[key]["y_score"].append(y_score_vals[i])
+
+    out = []
+    for (meta_key, group_value), payload in buckets.items():
+        meta = {name: value for name, value in zip(meta_names, meta_key)}
+        bucket = {
+            "group_name": group_name,
+            "group_value": group_value,
+            "meta": meta,
+            "y_true": list(payload["y_true"]),
+            "y_pred": list(payload["y_pred"]),
+            "y_score": list(payload["y_score"]) if y_score_vals is not None else None,
+            "n": len(payload["y_true"]),
+        }
+        reduced = rule(bucket)
+
+        row = dict(meta)
+        row["id"] = group_value
+        row[group_name] = group_value
+        row["n"] = bucket["n"]
+        row.update(reduced)
         out.append(Sample(row))
 
     return Dataset(out)

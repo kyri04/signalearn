@@ -81,6 +81,29 @@ def values(x):
         return [tuple(fc.fields[i].values for fc in x) for i in range(n)]
     return [f.values for f in x.fields]
 
+def resolve_group(predictions, group):
+    if isinstance(group, str):
+        return group, values(getattr(predictions, group))
+
+    group_name = group.name
+
+    if group._dataset is predictions:
+        return group_name, values(group)
+
+    src = group._dataset
+
+    id_to_group = {}
+    for sample in src.samples:
+        sid = str(sample.fields["id"].values)
+        id_to_group[sid] = sample.fields[group_name].values
+
+    group_vals = []
+    for sample in predictions.samples:
+        sid = str(sample.fields["id"].values)
+        group_vals.append(id_to_group[sid])
+
+    return group_name, group_vals
+
 def eval_once(train, test, x, target, model, fit, group=None, meta=None, extra=None):
     x_train = get(train, x)
     x_test = get(test, x)
