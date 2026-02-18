@@ -2,6 +2,7 @@ import random
 import numpy as np
 from collections import defaultdict
 from scipy.interpolate import interp1d
+from scipy.signal import find_peaks, peak_widths, savgol_filter
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 from signalearn.classes import Dataset, Sample
@@ -248,6 +249,110 @@ def baseline(y, lam=1e5, p=0.01, niter=10):
         params["labels"] = {out_name: f"{(y_field.label or y_name)} Baseline"}
         params["units"] = {out_name: y_field.unit}
         samples.append(Sample(params))
+    return Dataset(samples)
+
+def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.003):
+    dataset = y._dataset
+    x_dataset = x._dataset
+    x_name = x.name
+    y_name = y.name
+
+    x_by_id = {}
+    for sample in x_dataset.samples:
+        if "id" not in sample.fields or x_name not in sample.fields:
+            continue
+        x_by_id[str(sample.fields["id"].values)] = np.asarray(sample.fields[x_name].values, dtype=float).ravel()
+
+    aligned = []
+    for sample in dataset.samples:
+        sid = str(sample.fields["id"].values)
+        if sid in x_by_id and y_name in sample.fields:
+            aligned.append(
+                (sid, x_by_id[sid], np.asarray(sample.fields[y_name].values, dtype=float).ravel())
+            )
+
+    x_vals = aligned[0][1]
+    y_all = np.asarray([v[2] for v in aligned], dtype=float)
+    y_median = np.median(y_all, axis=0)
+
+    win = min(11, len(y_median) - (1 - len(y_median) % 2))
+    if win < 5:
+        y_for_peaks = y_median
+    else:
+        y_for_peaks = savgol_filter(y_median, window_length=win, polyorder=2)
+
+    prominence_min = float(prominence_frac) * (float(np.max(y_for_peaks)) - float(np.min(y_for_peaks)))
+    dq = float(np.median(np.diff(x_vals)))
+    min_peak_distance_pts = max(1, int(round(float(min_peak_distance) / max(dq, 1e-12))))
+    ref_peaks, _ = find_peaks(
+        y_for_peaks,
+        distance=min_peak_distance_pts,
+        prominence=prominence_min,
+    )
+    ref_peak_x = x_vals[ref_peaks]
+    x_unit = x.fields[0].unit or ""
+    y_unit = y.fields[0].unit or ""
+
+    samples = []
+    for sample in dataset.samples:
+        sid = sample.fields["id"].values
+        sid_key = str(sid)
+        if sid_key not in x_by_id:
+            continue
+        x_i = x_by_id[sid_key]
+        y_i = np.asarray(sample.fields[y_name].values, dtype=float).ravel()
+
+        if win < 5:
+            ys = y_i
+        else:
+            w = min(win, len(y_i) - (1 - len(y_i) % 2))
+            ys = y_i if w < 5 else savgol_filter(y_i, window_length=w, polyorder=2)
+
+        dq_i = float(np.median(np.diff(x_i)))
+        min_dist_pts_i = max(1, int(round(float(min_peak_distance) / max(dq_i, 1e-12))))
+        prom_min_i = float(prominence_frac) * (float(np.max(ys)) - float(np.min(ys)))
+        peaks_i, props_i = find_peaks(ys, distance=min_dist_pts_i, prominence=prom_min_i)
+
+        peak_x_i = np.array([], dtype=float)
+        fwhm_x_i = np.array([], dtype=float)
+        prom_i = np.array([], dtype=float)
+        if peaks_i.size > 0:
+            _, _, left_ips_i, right_ips_i = peak_widths(ys, peaks_i, rel_height=0.5)
+            idx_i = np.arange(len(x_i), dtype=float)
+            left_x_i = np.interp(left_ips_i, idx_i, x_i)
+            right_x_i = np.interp(right_ips_i, idx_i, x_i)
+            fwhm_x_i = right_x_i - left_x_i
+            peak_x_i = x_i[peaks_i]
+            prom_i = props_i["prominences"]
+
+        params = {"id": sid}
+        labels = {}
+        units = {}
+        for k, x_ref in enumerate(ref_peak_x, start=1):
+            pos_name = f"pos{k}"
+            fwhm_name = f"fwhm{k}"
+            prom_name = f"prominence{k}"
+            params[pos_name] = np.nan
+            params[fwhm_name] = np.nan
+            params[prom_name] = np.nan
+            if peaks_i.size > 0:
+                d = np.abs(peak_x_i - x_ref)
+                j = int(np.argmin(d))
+                if d[j] <= float(match_window):
+                    params[pos_name] = float(peak_x_i[j])
+                    params[fwhm_name] = float(fwhm_x_i[j])
+                    params[prom_name] = float(prom_i[j])
+            labels[pos_name] = f"Peak {k} Position"
+            labels[fwhm_name] = f"Peak {k} FWHM"
+            labels[prom_name] = f"Peak {k} Prominence"
+            units[pos_name] = x_unit
+            units[fwhm_name] = x_unit
+            units[prom_name] = y_unit
+
+        params["labels"] = labels
+        params["units"] = units
+        samples.append(Sample(params))
+
     return Dataset(samples)
 
 def subtract(a, b):
