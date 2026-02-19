@@ -292,6 +292,12 @@ def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.00
     ref_peak_x = x_vals[ref_peaks]
     x_unit = x.fields[0].unit or ""
     y_unit = y.fields[0].unit or ""
+    if x_unit and y_unit:
+        area_unit = f"{y_unit}*{x_unit}"
+    elif y_unit:
+        area_unit = y_unit
+    else:
+        area_unit = x_unit
 
     samples = []
     for sample in dataset.samples:
@@ -315,15 +321,26 @@ def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.00
 
         peak_x_i = np.array([], dtype=float)
         fwhm_x_i = np.array([], dtype=float)
+        left_x_i = np.array([], dtype=float)
+        right_x_i = np.array([], dtype=float)
+        height_i = np.array([], dtype=float)
         prom_i = np.array([], dtype=float)
+        area_i = np.array([], dtype=float)
         if peaks_i.size > 0:
-            _, _, left_ips_i, right_ips_i = peak_widths(ys, peaks_i, rel_height=0.5)
+            _, height_i, left_ips_i, right_ips_i = peak_widths(ys, peaks_i, rel_height=0.5)
             idx_i = np.arange(len(x_i), dtype=float)
             left_x_i = np.interp(left_ips_i, idx_i, x_i)
             right_x_i = np.interp(right_ips_i, idx_i, x_i)
             fwhm_x_i = right_x_i - left_x_i
             peak_x_i = x_i[peaks_i]
             prom_i = props_i["prominences"]
+            area_i = np.full(peaks_i.shape, np.nan, dtype=float)
+            n_i = len(x_i)
+            for m, (li, ri) in enumerate(zip(left_ips_i, right_ips_i)):
+                l = max(0, int(np.floor(li)))
+                r = min(n_i - 1, int(np.ceil(ri)))
+                if r > l:
+                    area_i[m] = float(np.trapz(y_i[l:r + 1], x_i[l:r + 1]))
 
         params = {"id": sid}
         labels = {}
@@ -332,9 +349,17 @@ def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.00
             pos_name = f"pos{k}"
             fwhm_name = f"fwhm{k}"
             prom_name = f"prominence{k}"
+            left_name = f"left{k}"
+            right_name = f"right{k}"
+            height_name = f"height{k}"
+            area_name = f"area{k}"
             params[pos_name] = np.nan
             params[fwhm_name] = np.nan
             params[prom_name] = np.nan
+            params[left_name] = np.nan
+            params[right_name] = np.nan
+            params[height_name] = np.nan
+            params[area_name] = np.nan
             if peaks_i.size > 0:
                 d = np.abs(peak_x_i - x_ref)
                 j = int(np.argmin(d))
@@ -342,12 +367,24 @@ def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.00
                     params[pos_name] = float(peak_x_i[j])
                     params[fwhm_name] = float(fwhm_x_i[j])
                     params[prom_name] = float(prom_i[j])
+                    params[left_name] = float(left_x_i[j])
+                    params[right_name] = float(right_x_i[j])
+                    params[height_name] = float(height_i[j])
+                    params[area_name] = float(area_i[j])
             labels[pos_name] = f"Peak {k} Position"
             labels[fwhm_name] = f"Peak {k} FWHM"
             labels[prom_name] = f"Peak {k} Prominence"
+            labels[left_name] = f"Peak {k} Left"
+            labels[right_name] = f"Peak {k} Right"
+            labels[height_name] = f"Peak {k} Height"
+            labels[area_name] = f"Peak {k} Area"
             units[pos_name] = x_unit
             units[fwhm_name] = x_unit
             units[prom_name] = y_unit
+            units[left_name] = x_unit
+            units[right_name] = x_unit
+            units[height_name] = y_unit
+            units[area_name] = area_unit
 
         params["labels"] = labels
         params["units"] = units

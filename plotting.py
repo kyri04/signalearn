@@ -179,9 +179,36 @@ def plot_scatter(x, y, by=None):
                 return (1, str(v))
 
         order = sorted(unique_order(group_list), key=sort_key)
-        for g in order:
-            mask = np.array([gv == g for gv in group_list], dtype=bool)
-            ax.scatter(xv[mask], yv[mask], s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5, label=str(g))
+        cycle = plt.rcParams.get("axes.prop_cycle", None)
+        palette = cycle.by_key().get("color", []) if cycle is not None else []
+        if not palette:
+            palette = [f"C{i}" for i in range(max(1, len(order)))]
+        colors = [palette[i % len(palette)] for i in range(len(order))]
+
+        group_idx = []
+        for gv in group_list:
+            idx = 0
+            for i, g in enumerate(order):
+                if gv == g:
+                    idx = i
+                    break
+            group_idx.append(idx)
+
+        rng = np.random.default_rng()
+        draw_order = rng.permutation(len(group_list))
+        point_colors = [colors[group_idx[i]] for i in draw_order]
+        ax.scatter(
+            xv[draw_order],
+            yv[draw_order],
+            s=20,
+            alpha=0.7,
+            edgecolors="0.2",
+            linewidths=0.5,
+            c=point_colors,
+        )
+
+        for i, g in enumerate(order):
+            ax.scatter([], [], s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5, c=[colors[i]], label=str(g))
         ax.legend()
 
     ax.set_xlabel(xlabel)
@@ -190,6 +217,108 @@ def plot_scatter(x, y, by=None):
         ax.tick_params(axis="x", which="both", labelbottom=False)
     if not yunit:
         ax.tick_params(axis="y", which="both", labelleft=False)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_scatter3D(x, y, z, by=None):
+    plt.close('all')
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    if hasattr(x, "_dataset"):
+        from signalearn.learning_utility import get as align_get
+        dataset = x._dataset
+        if hasattr(y, "_dataset") and y._dataset is not dataset:
+            y = align_get(dataset, y)
+        if hasattr(z, "_dataset") and z._dataset is not dataset:
+            z = align_get(dataset, z)
+        if by is not None and hasattr(by, "_dataset") and by._dataset is not dataset:
+            by = align_get(dataset, by)
+
+    xlabel, xunit = get_labels(x)
+    ylabel, yunit = get_labels(y)
+    zlabel, zunit = get_labels(z)
+
+    if xunit:
+        xlabel = f"{xlabel} ({xunit})"
+    if yunit:
+        ylabel = f"{ylabel} ({yunit})"
+    if zunit:
+        zlabel = f"{zlabel} ({zunit})"
+
+    xv = np.asarray([f.values for f in x.fields], dtype=float)
+    yv = np.asarray([f.values for f in y.fields], dtype=float)
+    zv = np.asarray([f.values for f in z.fields], dtype=float)
+
+    if by is None:
+        ax.scatter(xv, yv, zv, s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5)
+    else:
+        groups = np.asarray([f.values for f in by.fields], dtype=object)
+        group_list = groups.tolist()
+
+        def unique_order(vals):
+            out = []
+            for v in vals:
+                if not any(v == u for u in out):
+                    out.append(v)
+            return out
+
+        def sort_key(v):
+            if v is None:
+                return (2, "")
+            try:
+                f = float(v)
+                if np.isnan(f):
+                    return (2, "nan")
+                return (0, f)
+            except Exception:
+                return (1, str(v))
+
+        order = sorted(unique_order(group_list), key=sort_key)
+        cycle = plt.rcParams.get("axes.prop_cycle", None)
+        palette = cycle.by_key().get("color", []) if cycle is not None else []
+        if not palette:
+            palette = [f"C{i}" for i in range(max(1, len(order)))]
+        colors = [palette[i % len(palette)] for i in range(len(order))]
+
+        group_idx = []
+        for gv in group_list:
+            idx = 0
+            for i, g in enumerate(order):
+                if gv == g:
+                    idx = i
+                    break
+            group_idx.append(idx)
+
+        rng = np.random.default_rng()
+        draw_order = rng.permutation(len(group_list))
+        point_colors = [colors[group_idx[i]] for i in draw_order]
+        ax.scatter(
+            xv[draw_order],
+            yv[draw_order],
+            zv[draw_order],
+            s=20,
+            alpha=0.7,
+            edgecolors="0.2",
+            linewidths=0.5,
+            c=point_colors,
+        )
+
+        for i, g in enumerate(order):
+            ax.scatter([], [], [], s=20, alpha=0.7, edgecolors="0.2", linewidths=0.5, c=[colors[i]], label=str(g))
+        ax.legend()
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_zlabel(zlabel)
+
+    if not xunit:
+        ax.tick_params(axis="x", which="both", labelbottom=False)
+    if not yunit:
+        ax.tick_params(axis="y", which="both", labelleft=False)
+    if not zunit:
+        ax.tick_params(axis="z", which="both", labelleft=False)
 
     fig.tight_layout()
     return fig, ax
