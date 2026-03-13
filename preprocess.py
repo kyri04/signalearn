@@ -3,6 +3,7 @@ import numpy as np
 from collections import defaultdict
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks, peak_widths, savgol_filter
+from scipy.optimize import curve_fit
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 from signalearn.classes import Dataset, Sample
@@ -250,6 +251,83 @@ def baseline(y, lam=1e5, p=0.01, niter=10):
         params["units"] = {out_name: y_field.unit}
         samples.append(Sample(params))
     return Dataset(samples)
+
+def _pseudo_voigt(x, amp, x0, fwhm, eta, b0, b1):
+    fwhm = np.maximum(fwhm, 1e-12)
+    dx = (x - x0) / fwhm
+    g = np.exp(-4.0 * np.log(2.0) * dx * dx)
+    l = 1.0 / (1.0 + 4.0 * dx * dx)
+    return amp * (eta * l + (1.0 - eta) * g) + b0 + b1 * (x - x0)
+
+def _fit_pseudo_voigt_peak(x_i, y_i, peak_idx, fwhm_guess, half_window_pts):
+    n = int(len(x_i))
+    if n < 7:
+        return None
+
+    left = max(0, int(peak_idx) - int(half_window_pts))
+    right = min(n - 1, int(peak_idx) + int(half_window_pts))
+    if right - left < 6:
+        return None
+
+    xw = np.asarray(x_i[left:right + 1], dtype=float)
+    yw = np.asarray(y_i[left:right + 1], dtype=float)
+    finite = np.isfinite(xw) & np.isfinite(yw)
+    xw = xw[finite]
+    yw = yw[finite]
+    if xw.size < 7:
+        return None
+
+    x_min = float(np.min(xw))
+    x_max = float(np.max(xw))
+    span = max(x_max - x_min, 1e-12)
+    if not np.isfinite(span) or span <= 0:
+        return None
+
+    dx_med = np.diff(np.sort(xw))
+    dx_med = dx_med[np.isfinite(dx_med) & (dx_med > 0)]
+    if dx_med.size == 0:
+        return None
+    dx = float(np.median(dx_med))
+
+    x0_init = float(np.asarray(x_i, dtype=float)[int(peak_idx)])
+    b0_init = float(np.median(yw))
+    amp_init = float(np.max(yw) - b0_init)
+    if amp_init <= 0 or not np.isfinite(amp_init):
+        amp_init = max(float(np.std(yw)), 1e-12)
+    fwhm_init = float(max(fwhm_guess, dx))
+    p0 = [amp_init, x0_init, fwhm_init, 0.5, b0_init, 0.0]
+
+    bounds_low = [0.0, x_min, dx * 0.5, 0.0, -np.inf, -np.inf]
+    bounds_high = [np.inf, x_max, span, 1.0, np.inf, np.inf]
+
+    try:
+        popt, _ = curve_fit(
+            _pseudo_voigt,
+            xw,
+            yw,
+            p0=p0,
+            bounds=(bounds_low, bounds_high),
+            maxfev=10000,
+        )
+    except Exception:
+        return None
+
+    amp, x0, fwhm, eta, b0, b1 = [float(v) for v in popt]
+    if not (np.isfinite(x0) and np.isfinite(fwhm) and fwhm > 0):
+        return None
+
+    left_x = float(x0 - 0.5 * fwhm)
+    right_x = float(x0 + 0.5 * fwhm)
+    height = float(b0 + 0.5 * amp)
+
+    # Area under original signal in fitted FWHM bounds.
+    m = (x_i >= left_x) & (x_i <= right_x)
+    if np.count_nonzero(m) > 1:
+        area = float(np.trapz(np.asarray(y_i, dtype=float)[m], np.asarray(x_i, dtype=float)[m]))
+    else:
+        area = np.nan
+
+    return x0, fwhm, left_x, right_x, height, area
 
 def peaks(x, y, min_peak_distance=0.004, prominence_frac=0.03, match_window=0.003):
     dataset = y._dataset

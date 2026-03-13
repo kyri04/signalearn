@@ -86,9 +86,16 @@ def plot_mean(x, y):
     fig.tight_layout()
     return fig, ax
 
-def plot_median(x, y):
+def plot_median(x, y, by=None):
     plt.close('all')
     fig, ax = plt.subplots()
+
+    if by is not None and isinstance(y, (list, tuple)):
+        raise ValueError("plot_median with by expects a single y field collection.")
+
+    if by is not None and hasattr(y, "_dataset") and hasattr(by, "_dataset") and by._dataset is not y._dataset:
+        from signalearn.learning_utility import get as align_get
+        by = align_get(y._dataset, by)
 
     xlabel, xunit = get_labels(x)
     y_list = list(y) if isinstance(y, (list, tuple)) else [y]
@@ -105,16 +112,58 @@ def plot_median(x, y):
     x_vals = np.asarray(x.fields[0].values if hasattr(x, "fields") else x.values, dtype=float).ravel()
     line_handles = []
     band_colors = []
-    for yi in y_list:
-        y_vals = np.asarray([np.asarray(f.values, dtype=float).ravel() for f in yi.fields], dtype=float)
-        median = np.median(y_vals, axis=0)
-        q25 = np.percentile(y_vals, 25, axis=0)
-        q75 = np.percentile(y_vals, 75, axis=0)
-        lab = getattr(yi, "alias", None) or get_labels(yi)[0]
-        line = ax.plot(x_vals, median, label=f"{lab} Median")[0]
-        line_handles.append(line)
-        band_colors.append(line.get_color())
-        ax.fill_between(x_vals, q25, q75, color=line.get_color(), alpha=0.15, label="_nolegend_")
+    if by is None:
+        for yi in y_list:
+            y_vals = np.asarray([np.asarray(f.values, dtype=float).ravel() for f in yi.fields], dtype=float)
+            median = np.median(y_vals, axis=0)
+            q25 = np.percentile(y_vals, 25, axis=0)
+            q75 = np.percentile(y_vals, 75, axis=0)
+            lab = getattr(yi, "alias", None) or get_labels(yi)[0]
+            line = ax.plot(x_vals, median, label=f"{lab} Median")[0]
+            line_handles.append(line)
+            band_colors.append(line.get_color())
+            ax.fill_between(x_vals, q25, q75, color=line.get_color(), alpha=0.15, label="_nolegend_")
+    else:
+        yi = y_list[0]
+        groups = np.asarray([f.values for f in by.fields], dtype=object)
+        group_list = groups.tolist()
+
+        if len(group_list) != len(yi.fields):
+            raise ValueError("by must have the same number of samples as y.")
+
+        def unique_order(vals):
+            out = []
+            for v in vals:
+                if not any(v == u for u in out):
+                    out.append(v)
+            return out
+
+        def sort_key(v):
+            if v is None:
+                return (2, "")
+            try:
+                f = float(v)
+                if np.isnan(f):
+                    return (2, "nan")
+                return (0, f)
+            except Exception:
+                return (1, str(v))
+
+        order = sorted(unique_order(group_list), key=sort_key)
+
+        for g in order:
+            idx = [i for i, gv in enumerate(group_list) if gv == g]
+            y_vals = np.asarray(
+                [np.asarray(yi.fields[i].values, dtype=float).ravel() for i in idx],
+                dtype=float,
+            )
+            median = np.median(y_vals, axis=0)
+            q25 = np.percentile(y_vals, 25, axis=0)
+            q75 = np.percentile(y_vals, 75, axis=0)
+            line = ax.plot(x_vals, median, label=f"{g} Median")[0]
+            line_handles.append(line)
+            band_colors.append(line.get_color())
+            ax.fill_between(x_vals, q25, q75, color=line.get_color(), alpha=0.15, label="_nolegend_")
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)

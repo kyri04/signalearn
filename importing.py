@@ -60,6 +60,34 @@ def sample_from_file(path, header=True):
         params["id"] = path.stem
     return Sample(params)
 
+def samples_from_file_rows(path, header=True):
+    df, labels, units = _read_table(path, header=header)
+    samples = []
+
+    for i, (_, row) in enumerate(df.iterrows()):
+        params = {}
+        for c in df.columns:
+            v = row[c]
+            num = pd.to_numeric(pd.Series([v]), errors="coerce").iloc[0]
+            if pd.notna(num):
+                params[c] = float(num)
+            else:
+                params[c] = v
+
+        row_name = f"{path.stem}_{i:06d}"
+        params["name"] = row_name
+
+        if "id" in params and pd.notna(params["id"]) and str(params["id"]).strip() != "":
+            params["id"] = str(params["id"]).strip()
+        else:
+            params["id"] = row_name
+
+        params["labels"] = labels
+        params["units"] = units
+        samples.append(Sample(params))
+
+    return samples
+
 def _npz_base_stem(path):
     stem = path.stem
     inner = Path(stem)
@@ -107,9 +135,16 @@ def _load_map(map_source):
         data[k] = row
     return key_col, data
 
-def load_data(directory, map=None, format="auto", header=True):
+def load_data(input=None, map=None, format="auto", header=True, directory=None):
     exts = (".dat", ".txt", ".csv")
-    directory = Path(directory)
+    if input is None:
+        input = directory
+    elif directory is not None:
+        raise ValueError("Provide either 'input' or 'directory', not both.")
+    if input is None:
+        raise ValueError("load_data requires an input path.")
+
+    input_path = Path(input)
     map_key = None
     map_data = None
     if map is not None:
@@ -121,53 +156,63 @@ def load_data(directory, map=None, format="auto", header=True):
         format = "auto"
     fmt = format.lower() if isinstance(format, str) else format
 
-    if fmt == "auto":
-        chosen = {}
-        for ext in exts:
-            for fp in directory.glob(f"*{ext}"):
-                chosen.setdefault(fp.stem, fp)
-        for fp in directory.glob("*.npz"):
-            chosen[_npz_base_stem(fp)] = fp
-        files = sorted(chosen.values())
-    elif fmt == "npz":
-        files = sorted(directory.glob("*.npz"))
-    elif fmt in ("raw", "text"):
-        files = sorted(fp for ext in exts for fp in directory.glob(f"*{ext}"))
-    elif fmt in ("dat", "txt", "csv"):
-        files = sorted(directory.glob(f"*.{fmt}"))
+    if input_path.is_file():
+        files = [input_path]
     else:
-        ext = fmt if isinstance(fmt, str) else ""
-        if ext.startswith("."):
-            files = sorted(directory.glob(f"*{ext}"))
+        if fmt == "auto":
+            chosen = {}
+            for ext in exts:
+                for fp in input_path.glob(f"*{ext}"):
+                    chosen.setdefault(fp.stem, fp)
+            for fp in input_path.glob("*.npz"):
+                chosen[_npz_base_stem(fp)] = fp
+            files = sorted(chosen.values())
+        elif fmt == "npz":
+            files = sorted(input_path.glob("*.npz"))
+        elif fmt in ("raw", "text"):
+            files = sorted(fp for ext in exts for fp in input_path.glob(f"*{ext}"))
+        elif fmt in ("dat", "txt", "csv"):
+            files = sorted(input_path.glob(f"*.{fmt}"))
         else:
-            files = sorted(directory.glob(f"*.{ext}"))
+            ext = fmt if isinstance(fmt, str) else ""
+            if ext.startswith("."):
+                files = sorted(input_path.glob(f"*{ext}"))
+            else:
+                files = sorted(input_path.glob(f"*.{ext}"))
 
     for fp in files:
-        sample = sample_from_npz(fp) if fp.suffix == ".npz" else sample_from_file(fp, header=header)
-        if map_key and map_data:
-            row = None
-            if map_key in sample.fields:
-                ident = sample.fields[map_key].values
-                if isinstance(ident, np.ndarray):
-                    if ident.shape == ():
-                        ident = ident.item()
-                    elif ident.size > 0:
-                        ident = ident.ravel()[0]
-                row = map_data.get(str(ident))
-            else:
-                name = sample.name.values if "name" in sample.fields else fp.stem
-                if isinstance(name, np.ndarray):
-                    if name.shape == ():
-                        name = name.item()
-                    elif name.size > 0:
-                        name = name.ravel()[0]
-                name = str(name)
-                for key in map_keys_sorted:
-                    if key and key in name:
-                        row = map_data[key]
-                        break
-            if row:
-                for k, v in row.items():
-                    setattr(sample, k, v)
-        samples.append(sample)
+        if fp.suffix == ".npz":
+            row_samples = [sample_from_npz(fp)]
+        elif input_path.is_file():
+            row_samples = samples_from_file_rows(fp, header=header)
+        else:
+            row_samples = [sample_from_file(fp, header=header)]
+
+        for sample in row_samples:
+            if map_key and map_data:
+                row = None
+                if map_key in sample.fields:
+                    ident = sample.fields[map_key].values
+                    if isinstance(ident, np.ndarray):
+                        if ident.shape == ():
+                            ident = ident.item()
+                        elif ident.size > 0:
+                            ident = ident.ravel()[0]
+                    row = map_data.get(str(ident))
+                else:
+                    name = sample.name.values if "name" in sample.fields else fp.stem
+                    if isinstance(name, np.ndarray):
+                        if name.shape == ():
+                            name = name.item()
+                        elif name.size > 0:
+                            name = name.ravel()[0]
+                    name = str(name)
+                    for key in map_keys_sorted:
+                        if key and key in name:
+                            row = map_data[key]
+                            break
+                if row:
+                    for k, v in row.items():
+                        setattr(sample, k, v)
+            samples.append(sample)
     return Dataset(samples)
