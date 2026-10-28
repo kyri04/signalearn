@@ -19,9 +19,11 @@ Import with `import signalearn as sl`.
 
 ## Documentation
 
-- [Guide](docs/guide/index.md): data and analysis workflows.
-- [Reference](docs/reference/index.md): APIs and formats.
-- [Extensions](docs/extensions/index.md): agents, components, and adapters.
+[Read the documentation](https://kyri04.github.io/signalearn/).
+
+- [Guide](https://kyri04.github.io/signalearn/guide/index.html): data and analysis workflows.
+- [Reference](https://kyri04.github.io/signalearn/reference/index.html): APIs and formats.
+- [Extensions](https://kyri04.github.io/signalearn/extensions/index.html): agents, components, and adapters.
 
 ## Licence
 
