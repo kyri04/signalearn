@@ -3,6 +3,10 @@ if (typeof SphinxHighlight !== "undefined") {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelector("#pst-search-dialog form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
   const query = new URLSearchParams(window.location.search).get("q")?.trim();
   const heading = document.getElementById("search-heading");
   if (heading && query) {
@@ -44,6 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         text.replaceWith(fragment);
       }
+    }
+    if (url.searchParams.has("highlight")) {
+      const cleanUrl = new URL(url.href);
+      cleanUrl.searchParams.delete("highlight");
+      history.replaceState(history.state, "", cleanUrl.href);
     }
     const destination = match || anchor;
     const firstContent = article.querySelector("p, pre, ul, ol, table");

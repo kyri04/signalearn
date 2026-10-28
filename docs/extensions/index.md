@@ -1,7 +1,4 @@
 # Extensions
-
-Use agents and add project components.
-
 ```{toctree}
 :maxdepth: 1
 :hidden:

@@ -1,10 +1,6 @@
 # Validation
-
 Cross-validation runs your training procedure on explicit train/test partitions.
 Create fresh fitted components inside the procedure so folds do not share state.
-
-This example assumes `data` has `temperature` and `state` fields, with enough
-samples in each class for three folds:
 
 ```python
 import signalearn as sl
@@ -28,7 +24,6 @@ scores = sl.accuracy(held_out.state, held_out.state_target, by=held_out.fold)
 ```
 
 ## Splits
-
 Native splitters choose memberships. Examples from sklearn include:
 
 | Need | Splitter |
@@ -45,7 +40,6 @@ splits. Input order, gaps, and restricted training windows are preserved.
 Inspect a partition with `train, test = splits[0]`.
 
 ## Results
-
 Results include predictions, `fold`, and `source_id`. Supplying `target` adds
 aligned labels such as `state_target`; use these for scoring partial or repeated
 tests. Repeated predictions receive new event IDs and are not averaged.

@@ -1,5 +1,4 @@
 # Data
-
 A **Dataset** contains samples with named **Fields**. A sample might be a
 participant, image, recording, or spectrum. Each field holds one scalar or
 array per sample.
@@ -17,7 +16,6 @@ This dataset contains two samples. Each has a temperature and subject ID.
 Pass fields directly to SignaLearn functions to retain their identity and metadata.
 
 ## Access
-
 | Expression | Result |
 | --- | --- |
 | `data.temperature` | Field across samples. |
@@ -31,7 +29,6 @@ such as `data.temperature[0]`, also returns a raw value. Neither raw values nor
 NumPy arithmetic align samples or infer units.
 
 ## Arrays
-
 A sample can hold several fields, including arrays of different shapes.
 Here each sample has a subject ID and a recording:
 
@@ -50,7 +47,6 @@ can describe positions along an axis, such as timestamps or wavelengths.
 See [Arrays](arrays.md) for coordinate-based operations.
 
 ## Identity
-
 Every sample has a unique string ID. SignaLearn aligns fields by these IDs,
 including when rows arrive in a different order. Equal lengths alone do not
 establish that observations correspond.

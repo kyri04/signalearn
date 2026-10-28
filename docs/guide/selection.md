@@ -1,9 +1,6 @@
 # Selection
-
 Use a field to choose matching samples. The result is a dataset containing
 those samples and their fields, with IDs and metadata retained.
-
-For a dataset named `data`:
 
 ```python
 selected = sl.filter(data.subject, "S01")
@@ -14,7 +11,6 @@ Selection uses the field's current dataset. Filtering a subset never restores
 samples excluded earlier. Category values must match the stored values exactly.
 
 ## More operations
-
 | Task | Call |
 | --- | --- |
 | Several categories | `sl.filter(data.subject, ["S01", "S02"])` |
@@ -25,7 +21,6 @@ samples excluded earlier. Category values must match the stored values exactly.
 | Random sample | `sl.sample(data, n=2, seed=42)` |
 
 ## Partitions
-
 Use an existing partition field when one is supplied:
 
 ```python
@@ -44,7 +39,6 @@ without a seed for sequential splitting. For stratification or more complex
 splits, see [Validation](validation.md).
 
 ## Combine
-
 ```python
 combined = sl.concat([train, test])
 ```

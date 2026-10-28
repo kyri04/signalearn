@@ -1,8 +1,4 @@
 # Reference
-
-Exact interfaces and constraints. Functions are exported by `import signalearn as sl`.
-`sl.__version__` reports the installed version.
-
 ```{toctree}
 :maxdepth: 1
 :hidden:

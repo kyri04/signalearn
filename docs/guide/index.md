@@ -1,7 +1,4 @@
 # Guide
-
-Work through the main analysis steps.
-
 ```{toctree}
 :maxdepth: 1
 :hidden:

@@ -1,11 +1,9 @@
 # Adapters
-
 Adapters connect native components to SignaLearn operations. Pass a supported
 component to `fit`, `transform`, or `predict`; SignaLearn selects its adapter
 internally. Configure native options on the component.
 
 ## Support
-
 | Component | Operations |
 | --- | --- |
 | sklearn-compatible estimator | Fit, transform, predict, save/load. |
@@ -19,7 +17,6 @@ PyTorch and TensorFlow integrations are not implemented. A placeholder file or
 custom wrapper does not provide an integration by itself.
 
 ## Responsibilities
-
 Adapters handle native input/output conversion, state, metadata, and supported
 execution modes. Native libraries own their algorithms, losses, optimisers,
 and learned state. Shared helpers handle alignment and storage; public operations

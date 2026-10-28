@@ -17,7 +17,7 @@ html_baseurl = "https://kyri04.github.io/signalearn/"
 templates_path = ["_templates"]
 html_static_path = ["_static"]
 html_css_files = ["navigation.css"]
-html_js_files = ["search-data.js", "search.js"]
+html_js_files = ["search-data.js", "search.js", "navigation.js"]
 html_show_search_summary = False
 html_context = {"default_mode": "auto"}
 html_sidebars = {"**": ["sidebar-tree.html"]}
@@ -33,6 +33,7 @@ html_theme_options = {
     "secondary_sidebar_items": [],
     "article_header_start": [],
     "show_prev_next": False,
+    "back_to_top_button": False,
     "footer_start": [],
     "footer_end": [],
 }

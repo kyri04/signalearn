@@ -1,5 +1,4 @@
 # Predictions
-
 Use `sl.predict(x, model)` for native class labels or regression values. The
 optional `output` selects a scientifically different result where supported:
 
@@ -30,7 +29,6 @@ Positive values point towards that class. Scores are labelled `decision_scores`,
 not probabilities or logits.
 
 ## Constraints
-
 Check native method availability before consuming data. Unsupported outputs,
 native multilabel/multioutput tasks, and multiclass one-vs-one pair scores are
 rejected. Pairwise columns need a separate class-pair representation. Invalid
@@ -54,7 +52,6 @@ below also supports explicitly declared logits/multilabel outputs; the current
 sklearn adapter does not provide those native prediction modes.
 
 ## Schema
-
 Probability, decision-score, and logit fields can declare a `prediction` object.
 It is optional for ordinary measurements and class-label fields. It records
 scientific meaning independently of the model library:

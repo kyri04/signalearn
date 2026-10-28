@@ -1,10 +1,8 @@
 # Evaluation
-
 Defined in `signalearn.evaluation`. For workflows, see
 [metrics](../guide/evaluation.md) and [cross-validation](../guide/validation.md).
 
 ## Inputs
-
 Metrics take a prediction Field, or Dataset with exactly one non-ID Field,
 then a target Field. Require the same non-empty ID set, aligning target rows
 automatically. Inputs are scalar, complete, and have exactly matching units.
@@ -15,7 +13,6 @@ Fields, missing values, or incompatible dtypes raise errors. No observations
 are dropped. Required inputs are computed together, sharing upstream work.
 
 ## accuracy
-
 ```python
 sl.accuracy(predictions, target, *, by=None)
 ```
@@ -25,7 +22,6 @@ averaging mode, thresholding, or probability conversion. `by` changes the
 return to the grouped Dataset described below.
 
 ## Classification
-
 ```python
 sl.precision(predictions, target, *, average, positive=None, by=None)
 sl.recall(predictions, target, *, average, positive=None, by=None)
@@ -41,7 +37,6 @@ specificity equals recall for the opposite class; multiclass specificity
 remains one class versus all others.
 
 ### Averaging
-
 | Required `average` | Return |
 | --- | --- |
 | `"macro"` | Unweighted class mean. |
@@ -63,7 +58,6 @@ that would round a large integer is rejected, even though aggregate scores and
 confusion plots can still distinguish the original labels.
 
 ### Undefined values
-
 A zero denominator warns. Aggregate undefined scores are NaN; per-class scores
 are `None` in nullable Fields. Macro propagates undefined values. Weighted
 averages ignore zero-support classes, but propagate undefined values with
@@ -72,7 +66,6 @@ F1 is computed directly from counts: with some FP/FN and no TP, it is zero,
 even when precision or recall is undefined.
 
 ## Regression
-
 ```python
 sl.mae(predictions, target, *, by=None)
 sl.rmse(predictions, target, *, by=None)
@@ -91,7 +84,6 @@ warns and returns NaN for perfect predictions or negative infinity otherwise,
 following the mathematical behaviour of sklearn `force_finite=False`.
 
 ## Groups
-
 Every metric accepts optional `by`, a scalar complete Field with the exact
 prediction IDs. Targets and groups are aligned; missing values or ID subsets/
 supersets are errors. Shared inputs are computed together once before groups
@@ -112,7 +104,6 @@ No average across groups is inferred. A pooled metric and equal-weight group
 mean are distinct analysis choices.
 
 ## crossval
-
 ```python
 sl.crossval(splits, procedure, *, target=None)
 ```
@@ -136,7 +127,6 @@ tuning, nesting, or final model retraining is performed. Failures during a fold
 include its split context.
 
 ### Results
-
 The result contains returned predictions plus zero-based `fold` and `source_id`
 from the plan input. With unrepeated test coverage, preserve input IDs and input
 order, including partial coverage. If any sample is tested repeatedly, all

@@ -1,10 +1,8 @@
 # Learning
-
 `fit` and `predict` live in `signalearn.learning`; `transform` lives in
 `signalearn.preprocess`. All are exported at the package root.
 
 ## Inputs
-
 `x` is a Field, a sequence of Fields, or a Dataset. A Dataset supplies every
 field except `id`; select features explicitly to avoid including targets or
 unrelated metadata. Require non-empty input and distinct names other than `id`.
@@ -21,7 +19,6 @@ its native method. Field-valued arguments align by ID; raw arrays use native
 positional semantics. Ordinary parameters are copied for deferred operations.
 
 ## fit
-
 ```python
 sl.fit(x, model, target=None, **fit_params)
 ```
@@ -42,7 +39,6 @@ labels, and display preferences, without retaining target observations in that
 metadata. The native model itself may retain observations.
 
 ## transform
-
 ```python
 sl.transform(x, model, **transform_params)
 ```
@@ -67,7 +63,6 @@ Fields are nullable `float64`: NaNs become `None`, infinity/non-numeric values
 and integers losing float64 precision are rejected.
 
 ### Outputs
-
 Use `get_feature_names_out` when provided. An identity FunctionTransformer
 retains names. Otherwise the component must declare positive `n_features_out_`:
 names use the snake-case class plus source for one input/output, or class plus
@@ -84,7 +79,6 @@ FunctionTransformer retain them. Other unknown units remain unspecified.
 Changing units or feature meaning requires adapter/component knowledge.
 
 ## predict
-
 ```python
 sl.predict(x, model, *, output=None, **predict_params)
 ```

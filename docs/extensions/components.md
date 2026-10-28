@@ -1,10 +1,8 @@
 # Components
-
 Use `sl.transform` with a component that declares its inputs and outputs.
 The same public contract applies to human-written and agent-written code.
 
 ## Layout
-
 ```text
 sleep_study/
 ├── analysis.py
@@ -25,7 +23,6 @@ package importable from your analysis environment. Workspace extensions do not
 modify installed SignaLearn code.
 
 ## Example
-
 Place this component in your project's `preprocess.py` module:
 
 ```python
@@ -43,8 +40,6 @@ class RemoveOffset:
         return {"signal": inputs["signal"] - self.offset}
 ```
 
-Using the `recordings` dataset from [Arrays](../guide/arrays.md#coordinates):
-
 ```python
 processed = sl.transform(recordings.signal, RemoveOffset(offset=0.1))
 updated = recordings.assign(signal=processed.signal)
@@ -54,7 +49,6 @@ This stateless transformation preserves units, shape, and sample IDs. Learned
 components must be fitted separately on the training partition.
 
 ## Interface
-
 | Member | Purpose |
 | --- | --- |
 | `signalearn_mode` | `"sample"` or `"batch"`. |
@@ -76,7 +70,6 @@ for each sample. Scalars have shape (). No loading methods or observations are
 exposed. Output structure must not be discovered by trial execution.
 
 ## Outputs
-
 Names are non-empty strings other than `id`. Declarations accept Field
 constructor metadata, plus:
 
@@ -103,7 +96,6 @@ Invalid declarations fail before computation; invalid values fail on consumption
 Ordinary missing/masked/infinite-value restrictions apply.
 
 ## Execution
-
 | Mode | Array inputs |
 | --- | --- |
 | `sample` | One NumPy array per field. |
@@ -126,7 +118,6 @@ changing external state, or rely on side effects. Separate accesses may recomput
 shape checks cannot detect a transform that silently reorders samples.
 
 ## Limits
-
 This contract supports transform only. Externally fitted state is allowed, but
 must be learned only from the appropriate training partition and remain fixed
 while applying. Custom fitting/persistence, native Torch/TensorFlow integration,

@@ -1,11 +1,9 @@
 # Preprocessing
-
 Defined in `signalearn.preprocess`. Data operations return new Datasets.
 See [selection](../guide/selection.md) and [arrays](../guide/arrays.md)
 for examples. `transform` is specified with [learning components](learning.md#transform).
 
 ## Selection context
-
 Field-driven operations use the Field's current Dataset view, retaining visible
 fields and selected IDs. Context follows Dataset/bracket/`fields` access,
 slices, sample views, and bound coordinates. Independent Fields must first
@@ -13,7 +11,6 @@ belong to a Dataset. Context inspection is lazy; Field object identity is not
 guaranteed across accesses. Use sample IDs for correspondence.
 
 ## filter
-
 ```python
 sl.filter(x, value)
 ```
@@ -26,7 +23,6 @@ Integers require integer matches; float Fields accept numeric matches;
 strings/booleans are not coerced. Only x is computed.
 
 ## between
-
 ```python
 sl.between(x, lower=None, upper=None)
 ```
@@ -36,7 +32,6 @@ Require at least one finite numeric bound and `lower <= upper`. Missing values
 do not match. No conversion is inferred.
 
 ## where
-
 ```python
 sl.where(x, condition)
 ```
@@ -48,7 +43,6 @@ handles missingness explicitly; exceptions propagate. Only x and its dependencie
 are computed. Array content predicates read the selected arrays.
 
 ## sort
-
 ```python
 sl.sort(x, descending=False)
 ```
@@ -59,7 +53,6 @@ numeric strings are not interpreted. All context Fields follow the reordering;
 only x is computed. Arrays require an explicit reduction first.
 
 ## take
-
 ```python
 sl.take(x, ids)
 ```
@@ -70,7 +63,6 @@ Repeated or absent IDs are errors; empty requests return an empty Dataset.
 Source observation values are unnecessary.
 
 ## sample
-
 ```python
 sl.sample(data, n, seed=None)
 ```
@@ -82,7 +74,6 @@ independent random generator without changing NumPy global state. No values
 are computed; grouped/stratified sampling is not provided.
 
 ## split
-
 ```python
 sl.split(data, sizes=(0.8, 0.2), *, group=None, seed=None, shuffle=True)
 ```
@@ -103,7 +94,6 @@ group counts, so row proportions can differ. Without shuffling, groups follow
 first appearance. Only group values are read.
 
 ## concat
-
 ```python
 sl.concat(datasets)
 ```
@@ -124,7 +114,6 @@ normalisation, or resampling is inferred. Empty inputs within the sequence are
 valid; storage is joined lazily.
 
 ## slice
-
 ```python
 sl.slice(x, dim, indices)
 ```
@@ -144,7 +133,6 @@ dependencies remain attached; ambiguous references require explicit resolution.
 Selections compose, subject to upstream read/computation granularity.
 
 ## crop
-
 ```python
 sl.crop(x, dim, start=None, stop=None)
 ```
@@ -158,7 +146,6 @@ including zero. Coordinate values are read; other payloads stay lazy.
 Shared-coordinate updates follow `slice`.
 
 ## window
-
 ```python
 sl.window(x, dim, size, step=None, allow_partial=False)
 ```
@@ -189,7 +176,6 @@ provenance. Group by source recording or subject explicitly during evaluation.
 Changing a prediction's `class` axis through any array operation is rejected.
 
 ## Folds and folds
-
 ```python
 sl.Folds(data, indices)
 sl.folds(data, splitter, *, target=None, group=None)

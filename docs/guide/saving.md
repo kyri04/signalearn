@@ -1,12 +1,8 @@
 # Saving
-
 Save datasets, fitted components, and figures explicitly. Destinations must be
 new; SignaLearn creates missing parent folders and rejects existing paths.
 
 ## Data
-
-For a dataset named `data`:
-
 ```python
 path = sl.save_data(data, "results/data")
 restored = sl.load_data(path)
@@ -17,9 +13,6 @@ needed. Share the whole folder. IDs, metadata, coordinates, and prediction
 meaning survive loading. Saving computes the selected values.
 
 ## Models
-
-For separately fitted `scaler` and `model` components:
-
 ```python
 sl.save_model(scaler, "models/scaler")
 sl.save_model(model, "models/classifier")
@@ -37,9 +30,6 @@ manifest checks do not make an untrusted payload safe. These files support
 compatible Python environments, not automatic device conversion.
 
 ## Figures
-
-For a plotting result named `fig`:
-
 ```python
 sl.save_plot(fig, "figures/result.pdf")
 ```

@@ -1,5 +1,4 @@
 # Metadata
-
 Fields carry information about their values and how to display them.
 
 | Attribute | Meaning |
@@ -15,7 +14,6 @@ Fields carry information about their values and how to display them.
 | `colours`, `markers` | Category appearance. |
 
 ## Update
-
 ```python
 import signalearn as sl
 
@@ -29,7 +27,6 @@ updated = data.update(state={"colours": {"active": "purple"}})
 Changing a unit declaration does not convert its values.
 
 ## Display
-
 Plots use field labels, units, and category colours automatically. Formatted
 strings take precedence over plain labels. Mathtext such as
 `r"$\mu\mathrm{V}$"` needs no external LaTeX installation.

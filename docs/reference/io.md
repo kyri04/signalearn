@@ -1,10 +1,8 @@
 # I/O
-
 Defined in `signalearn.io`. Figure saving is specified under
 [save_plot](plotting.md#save_plot).
 
 ## load_data
-
 ```python
 sl.load_data(path, *, schema=None)
 ```
@@ -26,7 +24,6 @@ raise FileNotFoundError. Deferred value/coordinate checks run when consumed;
 successful loading does not validate every payload. Sources must remain unchanged.
 
 ## save_data
-
 ```python
 sl.save_data(data, path)
 ```
@@ -60,7 +57,6 @@ distinct from missing CSV cells. Typed category keys survive round trips.
 Values are saved without reshaping, scaling, casting, or resampling.
 
 ## Models
-
 ```python
 sl.save_model(model, path)
 sl.load_model(path)
@@ -73,7 +69,6 @@ instance unchanged. Path handling, existing-destination rejection, staging, and
 failure cleanup follow dataset saving.
 
 ### Support
-
 The current persistence adapter supports sklearn-compatible components exposing
 get_params/fit, including supported native composition and importable custom
 estimators. Learned components must be fitted; native stateless components can
@@ -95,7 +90,6 @@ Only known adapters are selected; arbitrary filesystem adapter imports are not
 allowed. Share the entire directory.
 
 ### Metadata
-
 The manifest is authoritative. Input metadata records names, logical kinds, and
 units in fitted order; target metadata records name, dtype, units, labels,
 formatted attributes, colours, and markers. Unknown entries are null. Category
@@ -109,7 +103,6 @@ training observations. The artifact does not embed a notebook or preparation
 code. Preprocessing and prediction components remain separate reusable objects.
 
 ### Compatibility
-
 Record Python, SignaLearn, sklearn, NumPy, SciPy, and Joblib versions, plus an
 installed distribution owning a non-sklearn top-level class when discoverable.
 Require the same Python major/minor and exact recorded dependencies other than

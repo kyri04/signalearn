@@ -1,10 +1,8 @@
 # Arrays
-
 Use `slice`, `crop`, and `window` to work inside each sample's arrays.
 Selecting `data[:3]` instead selects three whole samples.
 
 ## Coordinates
-
 This example creates two recordings with different lengths. Each signal's
 `time` axis references its own time field:
 
@@ -29,9 +27,6 @@ Matching axis names alone do not link fields. The explicit reference lets
 operations update the signal and its time coordinates together.
 
 ## Slice and crop
-
-Continuing with `recordings`:
-
 ```python
 selected = sl.slice(recordings.signal, dim="time", indices=range(2, 6))
 cropped = sl.crop(recordings.signal, dim="time", start=0.2, stop=0.5)
@@ -41,7 +36,6 @@ Slicing selects positions. Cropping selects coordinate values, including both
 bounds. Here the bounds are seconds. Unrelated fields remain unchanged.
 
 ## Window
-
 ```python
 windows = sl.window(recordings.signal, dim="time", size=0.4, step=0.2)
 train, test = sl.split(windows, sizes=(0.5, 0.5), group=windows.source_id, seed=42)

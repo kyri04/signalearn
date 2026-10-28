@@ -1,11 +1,9 @@
 # Agents
-
 Give your agent access to these docs through a documentation MCP tool or a link
 in your project's `AGENTS.md`. SignaLearn does not provide its own MCP server.
 Use the reference to check exact APIs and constraints.
 
 ## Instructions
-
 Paste this into your project's `AGENTS.md`, replacing the documentation location:
 
 ```markdown
@@ -20,7 +18,6 @@ Verify supported inputs, outputs, and constraints in the reference.
 ```
 
 ## Workflow
-
 Establish what each sample represents, its fields and units, existing partitions,
 and the independent unit of evaluation. Resolve ambiguity with the source or
 user. Preserve original downloads and record preparation decisions.

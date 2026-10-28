@@ -1,5 +1,4 @@
 # Loading
-
 Prepare data as a CSV table with a matching JSON schema. Array fields reference
 numeric NPY or NPZ files.
 
@@ -23,7 +22,6 @@ SignaLearn finds the schema beside the CSV. Input paths follow the working
 directory; paths inside the manifest are relative to that manifest.
 
 ## Preparation
-
 Define what a sample represents, its fields, units, coordinates, and any
 existing partitions. Preserve the source values, array types, and axis order.
 Unknown units or sampling rates should remain unspecified until verified.
@@ -35,7 +33,6 @@ resizing, imputation, and new partitions are separate analysis choices.
 Keep original downloads and record preparation decisions in shared notes.
 
 ## Execution
-
 SignaLearn uses Dask internally to defer loading and computation. Selecting
 recordings usually leaves their signal arrays on disk. Accessing, plotting,
 evaluating, or saving a result computes the values it needs; `.values` returns

@@ -1,5 +1,4 @@
 # SignaLearn
-
 SignaLearn keeps scientific analysis choices explicit while handling routine
 implementation details.
 

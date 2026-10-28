@@ -1,9 +1,6 @@
 # Plotting
-
 Plots use field metadata for labels, units, colours, and markers. Every plotting
 function returns `(figure, axes)` and accepts existing axes.
-
-For a dataset named `data` with `temperature` and `state` fields:
 
 ```python
 import signalearn as sl
@@ -13,7 +10,6 @@ ax.set_title("Temperature by state")
 ```
 
 ## Plots
-
 | Plot | Function |
 | --- | --- |
 | Scatter | `plot_scatter` |
@@ -32,7 +28,6 @@ The dataset is unchanged. Image plotting validates pixel values and axes
 without silently rescaling them.
 
 ## Styles
-
 ```python
 sl.set_plot_style("academic")
 ```
@@ -50,9 +45,6 @@ Each selection starts from Matplotlib defaults. Styles do not change the global
 backend or settings; reselect an edited file to reload it.
 
 ## Layout
-
-Continue with the same `data`:
-
 ```python
 import matplotlib.pyplot as plt
 

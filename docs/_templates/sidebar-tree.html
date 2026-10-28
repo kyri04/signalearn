@@ -1,3 +1,10 @@
+<div class="sl-navigation-header">
+  <a id="sl-navigation-title" class="navbar-brand" href="{{ pathto(root_doc) }}">{{ project }}</a>
+  <button type="button" class="sl-navigation-close" aria-label="Close navigation">
+    <span class="fa-solid fa-xmark" aria-hidden="true"></span>
+  </button>
+</div>
+<div class="sl-navigation-scroll">
 <nav class="bd-docs-nav bd-links" aria-label="{{ _('Documentation') }}">
   <div class="bd-toc-item navbar-nav">
     {{ generate_toctree_html(
@@ -11,3 +18,4 @@
     ) }}
   </div>
 </nav>
+</div>

@@ -1,10 +1,8 @@
 # Data
-
 Public objects are defined in `signalearn.data`. They retain sample identity
 and interpretation; their public `.values` interface returns NumPy values.
 
 ## Dataset
-
 ```python
 sl.Dataset(fields, *, ids=None)
 ```
@@ -32,7 +30,6 @@ retain field declarations. Views share storage and preserve ID order. Selection 
 samples or fields from an earlier dataset context.
 
 ### select
-
 ```python
 data.select(*names)
 ```
@@ -41,7 +38,6 @@ Return only requested Fields, always retaining `id`. Samples are unchanged.
 Hidden array coordinate dependencies remain attached.
 
 ### assign
-
 ```python
 data.assign(fields=None, /, **updates)
 ```
@@ -53,7 +49,6 @@ mapping and keyword updates cannot supply a name twice. `id` cannot be replaced.
 The original Dataset remains unchanged.
 
 ### update
-
 ```python
 data.update(fields=None, /, **updates)
 ```
@@ -73,7 +68,6 @@ previous plots are unchanged. Invalid metadata, unknown names, or duplicate
 mapping/keyword updates raise errors.
 
 ## Field
-
 ```python
 sl.Field(
     values, *, ids=None, dtype=None, unit=None, label=None,
@@ -88,7 +82,6 @@ When constructed independently, a Field has no Dataset selection context; add
 it to a Dataset before Field-driven whole-Dataset operations.
 
 ### Values
-
 Scalars support logical `string`, `bool`, `int64`, and `float64` types. Types and
 nullability can be inferred from in-memory values. All-missing scalar input
 requires a dtype. Integers and floats may infer `float64`; strings, booleans,
@@ -109,7 +102,6 @@ integer/boolean arrays are unsupported. Empty array Fields need an explicit
 dtype and enough structure to represent their shape.
 
 ### Coordinates
-
 `coords` maps declared dimensions to inline numeric/string/boolean vectors or
 references such as `{"field": "time"}`. Inline vectors are shared; mixed
 booleans/numbers or strings/numbers are rejected. Referenced Fields are
@@ -124,7 +116,6 @@ dependent Field retains hidden coordinate dependencies. Updating or replacing
 an explicitly referenced coordinate in a Dataset updates its dependents.
 
 ### Access
-
 Fields expose `ids`, `name`, `dtype`, `nullable`, `dims`, `coords`, `prediction`,
 and the display attributes listed under `update`. A Field's name is established
 by its Dataset. Unit/label attributes are strings or `None`; colours and markers
@@ -150,14 +141,12 @@ use bounded previews following NumPy print options, subject to upstream batch
 semantics.
 
 ## Sample
-
 `data[index]` returns a `Sample`. `sample.id` is the raw ID string;
 `sample.fields` maps names to regular one-sample Fields. Named/bracket access
 returns a value-like `SampleField`, including bracket access to `"id"`.
 Both Dataset and Sample advertise field names through runtime completion.
 
 ## SampleField
-
 Usually obtained through `data[index].name`. It retains identity and metadata
 while displaying and supporting operations on the selected value.
 
@@ -173,7 +162,6 @@ contents and arithmetic return raw NumPy results. `len(sample_field)` still
 counts its one sample. Use `sample.fields[name]` for the regular one-sample Field.
 
 ## Component outputs
-
 A custom transformation can declare scalar and array outputs together. For a
 spectrum with an established unit:
 

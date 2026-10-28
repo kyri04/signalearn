@@ -1,11 +1,9 @@
 # Plotting
-
 Defined in `signalearn.plotting`. Plots use Matplotlib, return `(Figure, Axes)`,
 accept existing axes without clearing artists, and do not show/save/close them.
 Styles are scoped, preserving global rc settings and the active backend.
 
 ## Inputs
-
 Scalar coordinates are numeric Fields, not raw arrays or strings. Inputs need
 the same sample ID set and align to the first coordinate Field. Only selected
 Fields/dependencies are computed together. Category grouping is scalar and
@@ -21,7 +19,6 @@ group markers fall back to by.marker then Matplotlib's default. Missing groups
 are grey and labelled Missing. Explicit palettes remain consistent across subsets.
 
 ## plot_scatter
-
 ```python
 sl.plot_scatter(x, y, by=None, ax=None)
 ```
@@ -34,7 +31,6 @@ Matplotlib has no general scatter-opacity style setting. Customise the returned
 collection for a one-off change.
 
 ## plot_hist
-
 ```python
 sl.plot_hist(x, by=None, bins="fd", density=False, ax=None)
 ```
@@ -52,7 +48,6 @@ zero heights for counts. Missing x is omitted with warning. Empty/all-missing x
 is an error. Ungrouped colour comes from x.
 
 ## plot_box
-
 ```python
 sl.plot_box(x, by=None, ax=None)
 ```
@@ -67,7 +62,6 @@ Outlier style otherwise follows the selected style. Missing x is omitted with
 warning; groups without valid x have no box. Empty/all-missing x is an error.
 
 ## plot_image
-
 ```python
 sl.plot_image(x, ax=None)
 ```
@@ -90,7 +84,6 @@ for irregular coordinates. Image cmap/interpolation belong in the style or on
 ax.images[0]. There is no gallery, video playback, channel selector, or file decoder.
 
 ## plot_line
-
 ```python
 sl.plot_line(x, y=None, by=None, ax=None)
 ```
@@ -110,7 +103,6 @@ identify sample IDs without an automatic legend; grouped lines have one legend
 entry per category. Width/default markers use the style.
 
 ## plot_confusion_matrix
-
 ```python
 sl.plot_confusion_matrix(predictions, target, normalize=None, ax=None)
 ```
@@ -125,7 +117,6 @@ Formatted target labels and image.cmap are used. Access the matrix/artist throug
 ax.images[0].
 
 ## set_plot_style
-
 ```python
 sl.set_plot_style(path=None)
 ```
@@ -149,7 +140,6 @@ their fonts/grid; new artists use supported shared settings. Backend settings
 are ignored by Matplotlib style loading. See [custom styles](../guide/plotting.md#styles).
 
 ## save_plot
-
 ```python
 sl.save_plot(plot, path)
 ```

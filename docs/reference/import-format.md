@@ -1,5 +1,4 @@
 # Data format
-
 `load_data` accepts version-1 `rows` and `arrays` layouts. The same formats are
 written by `save_data`. This reference specifies the on-disk contract; start
 with [preparation](../guide/loading.md) for the workflow. Numeric
@@ -7,7 +6,6 @@ arrays represent images, recordings, spectra, or other explicitly structured
 measurements. The old `recordings` layout name is unsupported.
 
 ## Requirements
-
 - The sample boundary is explicit: one table row for `rows`, or one manifest
   row for `arrays`. One image, utterance, spectrum, or recording can be a sample.
   Import does not split recordings into windows or videos into frames.
@@ -44,7 +42,6 @@ represented as `None`; nullable fields use object storage to preserve integer
 and boolean values without substituting a floating-point missing marker.
 
 ## Schema
-
 `version` is `1`. `layout` is `rows` or `arrays`. A field
 declaration contains a `dtype` and may include display metadata and `nullable`:
 
@@ -134,7 +131,6 @@ Column order does not matter when columns are selected by name. Unknown schema
 keys or unsupported schema versions are errors.
 
 ## Tables
-
 Each row represents one observation and each declared field contains one scalar
 value for that observation. For example, `samples.csv`:
 
@@ -170,7 +166,6 @@ JSON string literals are supported only through the explicit string encoding
 described above.
 
 ## Arrays
-
 The manifest supplies scalar fields and literal references to numeric arrays.
 The schema defines how each reference becomes a field value. File order,
 directory contents, filenames, and matching array lengths do not establish
@@ -190,7 +185,6 @@ lets saved subsets preserve their coordinate dependencies and visible field
 order. If omitted, all declared fields remain visible as before.
 
 ### Storage
-
 Supported storage formats are `.npy` for one numeric array and `.npz` for
 named numeric arrays. Original formats such as IDX, JPEG, video containers,
 or dataset-specific text need an explicit preparation step or a future
@@ -234,7 +228,6 @@ uses separate rectangular arrays for its samples rather than an object array
 or automatic padding inside one file.
 
 ### Shape
-
 Each array declaration requires `dtype` and `dims` in addition to `source`.
 Array dtypes are `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`,
 `uint32`, `uint64`, `float16`, `float32`, or `float64`. The declaration must
@@ -268,7 +261,6 @@ torque, should be separate fields unless a future explicit representation
 supports their differing units.
 
 ### Coordinates
-
 `coords` is optional. It maps a subset of the declared dimension names to either
 a one-dimensional JSON list of finite numbers, strings, or booleans, or a
 reference of the form `{"field": "time"}`. An empty vector is valid for a
@@ -304,9 +296,7 @@ Array declarations allow exactly `source`, `dtype`, `dims`, optional `shape`,
 `coords`, `nullable`, the common display attributes, and optional `prediction` metadata. Unknown attributes are
 errors. Missing paths or indices are errors even if an array is nullable.
 
-
 ## Example
-
 For MNIST, samples share two image arrays. The file layout is:
 
 ```text
@@ -361,7 +351,6 @@ axis, unit, scaling, resize, or partition assignment is inferred. IDs include
 the partition because source indices restart in each file.
 
 ## Validation
-
 If an `id` column is supplied, declare it as a non-nullable string field. IDs
 must be non-empty and unique across the dataset. Preserve supplied IDs exactly.
 If the column and declaration are both omitted, SignaLearn generates IDs at
@@ -396,9 +385,7 @@ Import never silently repairs, drops, or reinterprets invalid observations.
 Schema validation and mechanical conversion are separate from any subsequent
 preprocessing chosen by the user.
 
-
 ## Predictions
-
 The optional `prediction` entry identifies probabilities, decision scores,
 or logits independently of value dtype. Its complete schema and typed class
 display mappings are specified under [prediction metadata](predictions.md#schema).

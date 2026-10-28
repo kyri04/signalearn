@@ -1,5 +1,4 @@
 # Evaluation
-
 Metrics take predictions first and the true target field second. SignaLearn
 aligns them by sample ID. Both must describe the same complete set of observations.
 
@@ -12,7 +11,6 @@ per_class = sl.f1(predictions.state, test.state, average=None)
 ```
 
 ## Metrics
-
 | Task | Functions |
 | --- | --- |
 | Classification | `accuracy`, `precision`, `recall`, `specificity`, `f1` |
@@ -27,7 +25,6 @@ Undefined scores warn and remain distinguishable from zero. Metrics do not
 drop missing values, threshold probabilities, or convert units.
 
 ## Groups
-
 Pass a grouping field to score each group separately:
 
 ```python
