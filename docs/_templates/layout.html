@@ -1,0 +1,9 @@
+{% extends "!layout.html" %}
+
+{% block css %}
+  {{ super() }}
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = "auto";
+    document.documentElement.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  </script>
+{% endblock %}

@@ -1,0 +1,27 @@
+figure.figsize: 5, 3.5
+figure.dpi: 100
+font.family: STIXGeneral
+font.size: 10
+mathtext.fontset: stix
+text.usetex: False
+text.parse_math: True
+axes.labelsize: 10
+axes.titlesize: 11
+axes.linewidth: 0.7
+axes.grid: False
+xtick.labelsize: 9
+ytick.labelsize: 9
+xtick.direction: in
+ytick.direction: in
+xtick.top: True
+ytick.right: True
+xtick.minor.visible: True
+ytick.minor.visible: True
+lines.linewidth: 1
+lines.markersize: 6
+legend.fontsize: 9
+legend.title_fontsize: 10
+legend.frameon: False
+savefig.dpi: 300
+savefig.bbox: tight
+savefig.pad_inches: 0.05
