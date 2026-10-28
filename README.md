@@ -24,3 +24,5 @@ Import with `import signalearn as sl`.
 
 ## Licence
 SignaLearn is available under the [MIT licence](LICENSE).
+
+If you use SignaLearn in published research, please cite it.

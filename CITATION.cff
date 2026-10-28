@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use SignaLearn in published research, please cite it."
+type: software
+title: SignaLearn
+authors:
+  - family-names: Kyriacou
+    given-names: Kyriacos
+repository-code: "https://github.com/kyri04/signalearn"
+url: "https://kyri04.github.io/signalearn/"
+license: MIT
