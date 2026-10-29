@@ -5,12 +5,13 @@ from typing import Any
 
 from ._internal.adapters import get_adapter
 from ._internal.adapters.splitting import native_splits
-from ._internal.alignment import model_inputs, output_dataset, selected_fields
+from ._internal.alignment import model_inputs, selected_fields
 from ._internal.axes import (
     axis_context, axis_dataset, coordinate_bounds, interval_positions, numeric_coordinate,
     positional_plan, window_metadata, window_parameters, window_plan,
 )
 from ._internal.data import dataset_view, materialise_values, new_ids, require_scalar
+from ._internal.features import transform_dataset
 from ._internal.preprocess import (
     component_dataset, component_tasks, concat_inputs, concatenated_field, deferred_transform,
     fold_columns, fold_fields, matching_values, partition_indices, predicate_mask, range_bounds, requested_ids,
@@ -18,7 +19,7 @@ from ._internal.preprocess import (
 )
 from .data import Dataset, Field
 
-__all__ = ["Folds", "folds", "transform", "split", "filter", "between", "where", "sort", "take", "sample", "concat",
+__all__ = ["Folds", "folds", "transform", "split", "filter", "exclude", "between", "where", "sort", "take", "sample", "concat",
            "slice", "crop", "window"]
 
 
@@ -63,12 +64,14 @@ def transform(
     fields, names, ids = selected_fields(x)
     fields, names = adapter.fitted_inputs(model, fields, names)
     schema = adapter.output_schema(model, fields, names)
+    if getattr(adapter, "batched", False):
+        return adapter.deferred_output(model, fields, names, ids, schema, "transform", transform_params)
     if getattr(adapter, "structured", False):
         tasks = component_tasks(adapter, model, fields, names, transform_params, ids, schema)
         return component_dataset(tasks, schema, fields, names, ids, model.signalearn_mode == "batch")
     inputs = model_inputs(fields, None, transform_params, ids, snapshot=True)
-    result = deferred_transform(adapter, model, inputs, (len(ids), len(schema)))
-    return output_dataset(result, schema, ids)
+    result = deferred_transform(adapter, model, inputs, (len(ids), adapter.transform_shape(schema)))
+    return transform_dataset(result, schema, fields, names, ids)
 
 
 def split(
@@ -88,6 +91,15 @@ def filter(x: Field, value: Any) -> Dataset:
         return data[:0]
     values = materialise_values(x).tolist()
     return data[[index for index, observed in enumerate(values) if observed in wanted]]
+
+
+def exclude(x: Field, value: Any) -> Dataset:
+    data = selection_source(x)
+    unwanted = matching_values(x, value, operation="exclude")
+    if not unwanted:
+        return data[:]
+    values = materialise_values(x).tolist()
+    return data[[index for index, observed in enumerate(values) if observed not in unwanted]]
 
 
 def between(x: Field, lower: int | float | None = None, upper: int | float | None = None) -> Dataset:

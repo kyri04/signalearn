@@ -7,6 +7,7 @@ data
 io
 preprocess
 learning
+models
 predictions
 evaluation
 plotting
@@ -25,6 +26,9 @@ Selection and transformations.
 
 [**Learning**](learning.md)
 Fitting and prediction.
+
+[**Models**](models.md)
+PyTorch and TensorFlow/Keras.
 
 [**Predictions**](predictions.md)
 Outputs and class meaning.

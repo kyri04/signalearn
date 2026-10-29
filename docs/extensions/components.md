@@ -1,6 +1,8 @@
 # Components
 Use `sl.transform` with a component that declares its inputs and outputs.
 The same public contract applies to human-written and agent-written code.
+For native PyTorch or Keras networks, use [sl.Model](../reference/models.md).
+Custom neural training uses its [trainer contract](../reference/models.md#custom-training).
 
 ## Layout
 ```text
@@ -63,6 +65,8 @@ computation. `transform` returns exactly those names and one value per sample.
 Input names must match the selected Fields. IDs align automatically, and order
 follows the declaration. Dimensions match exactly, including order; scalars use
 `()`. No casting or unit conversion is inferred.
+The first selected input defines the samples; other inputs and Field-valued
+parameters may cover a larger dataset. See [alignment](../reference/data.md#alignment).
 
 `signalearn_outputs` receives dictionaries containing dtype, dims, nullable,
 coords, display attributes, common per-sample shape (or None), and exact shapes
@@ -118,9 +122,9 @@ changing external state, or rely on side effects. Separate accesses may recomput
 shape checks cannot detect a transform that silently reorders samples.
 
 ## Limits
-This contract supports transform only. Externally fitted state is allowed, but
-must be learned only from the appropriate training partition and remain fixed
-while applying. Custom fitting/persistence, native Torch/TensorFlow integration,
-incremental execution, and sample-creating components are not implemented.
+The `signalearn_mode` contract supports transform only. Externally fitted state
+must be learned from the appropriate training partition and remain fixed while
+applying. It does not provide fitting, persistence, incremental execution, or
+sample-creating components. `sl.Model` reuses its input and transform-output declarations.
 Importable sklearn-compatible estimators use the existing native fit/predict/
 save_model interface.

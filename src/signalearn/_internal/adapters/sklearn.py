@@ -16,6 +16,7 @@ from ..data import infer_dtype, require_scalar, validate_block
 from ..metadata import DISPLAY_ATTRIBUTES
 from ..model_io import importable_reference
 from ..prediction import class_values, validate_prediction_values
+from ..features import feature_contract, feature_names, feature_width, preserving_transform
 
 persistence_name = "sklearn"
 persistence_format = "joblib"
@@ -62,7 +63,9 @@ def validate_persistence(model):
 
 def persistence_metadata(model):
     inputs = getattr(model, "_signalearn_inputs", None)
-    return {"inputs": None if inputs is None else [{"name": name, "kind": kind, "unit": unit}
+    vectors = getattr(model, "_signalearn_vectors", {})
+    return {"inputs": None if inputs is None else [{"name": name, "kind": kind, "unit": unit,
+                                                   **({"vector": vectors[name]} if name in vectors else {})}
                                                   for name, kind, unit in inputs],
             "target": getattr(model, "_signalearn_target", None)}
 
@@ -71,7 +74,7 @@ def dump_model(model, path):
     stored = copy(model)
     if stored is model:
         raise TypeError("Component copying must return an independent instance for persistence")
-    for attribute in ("_signalearn_inputs", "_signalearn_target"):
+    for attribute in ("_signalearn_inputs", "_signalearn_target", "_signalearn_vectors"):
         if hasattr(stored, attribute):
             delattr(stored, attribute)
     try:
@@ -96,18 +99,20 @@ def load_model(path):
 
 
 def restore_metadata(model, metadata):
-    for attribute in ("_signalearn_inputs", "_signalearn_target"):
+    for attribute in ("_signalearn_inputs", "_signalearn_target", "_signalearn_vectors"):
         if hasattr(model, attribute):
             delattr(model, attribute)
     if metadata["inputs"] is not None:
         model._signalearn_inputs = tuple((field["name"], field["kind"], field["unit"])
                                          for field in metadata["inputs"])
+        model._signalearn_vectors = {field["name"]: deepcopy(field["vector"]) for field in metadata["inputs"]
+                                     if "vector" in field}
     if metadata["target"] is not None:
         model._signalearn_target = deepcopy(metadata["target"])
 
 
 def input_kind(field):
-    return "numeric" if field.dtype in {"int64", "float64"} else field.dtype
+    return "numeric" if (field.dims and field.dtype != "bool") or field.dtype in {"int64", "float64"} else field.dtype
 
 
 def fit_model(model, matrix, target, parameters, fields, names, target_field=None):
@@ -129,12 +134,27 @@ def fit_model(model, matrix, target, parameters, fields, names, target_field=Non
     return fitted
 
 
+def fit_fields(model, fields, names, target, parameters, ids):
+    from ..alignment import model_inputs
+
+    feature_names(fields, names)
+    contract = feature_contract(fields, names)
+    matrix, labels, options = model_inputs(fields, target, parameters, ids).compute()
+    fitted = fit_model(model, matrix, labels, options, fields, names, target)
+    fitted._signalearn_vectors = contract
+    return fitted
+
+
 def fitted_inputs(model, fields, names):
     check_is_fitted(model)
     for field in fields:
-        require_scalar(field, "This scikit-learn integration")
+        feature_width(field)
     schema = getattr(model, "_signalearn_inputs", None)
     expected = tuple(item[0] for item in schema) if schema is not None else getattr(model, "feature_names_in_", None)
+    if schema is None and any(field.dims for field in fields):
+        if expected is not None and tuple(expected) != feature_names(fields, names):
+            raise ValueError("Expanded vector feature names must match the externally fitted component's feature order")
+        expected = None
     if expected is not None:
         expected = tuple(expected)
         if set(expected) != set(names) or len(expected) != len(names):
@@ -142,13 +162,18 @@ def fitted_inputs(model, fields, names):
         lookup = dict(zip(names, fields))
         fields, names = tuple(lookup[name] for name in expected), expected
     if schema is not None:
+        if feature_contract(fields, names) != getattr(model, "_signalearn_vectors", {}):
+            raise ValueError("Vector feature dimensions, lengths, and coordinates must match the fitted component")
         for field, (name, kind, unit) in zip(fields, schema):
             if input_kind(field) != kind:
                 raise ValueError(f"Field {name!r} has an incompatible logical dtype")
             if field.unit != unit:
                 raise ValueError(f"Field {name!r} must use the fitted unit {unit!r}; no unit conversion is inferred")
-    if getattr(model, "n_features_in_", len(fields)) != len(fields):
-        raise ValueError("The number of input fields must match the fitted component")
+    else:
+        feature_contract(fields, names)
+    count = len(feature_names(fields, names))
+    if getattr(model, "n_features_in_", count) != count:
+        raise ValueError("The number of input features must match the fitted component")
     return fields, names
 
 
@@ -184,9 +209,19 @@ def output_features(model, input_names):
 
 def output_schema(model, fields, names):
     sources = dict(zip(names, fields))
+    if any(field.dims for field in fields) and preserving_transform(model):
+        return {name: {"dtype": "float64", "nullable": True, **output_metadata(model, field),
+                        **({"dims": field.dims, "shape": (feature_width(field),),
+                            "coords": {dim: {"field": coordinate.name} if hasattr(coordinate, "ids") else coordinate.tolist()
+                                       for dim, coordinate in field.coords.items()}} if field.dims else {})}
+                for field, name in zip(fields, names)}
     return {name: {"dtype": "float64", "nullable": True,
                    **output_metadata(model, sources.get(source))}
-            for name, source in output_features(model, names)}
+            for name, source in output_features(model, feature_names(fields, names))}
+
+
+def transform_shape(schema):
+    return sum(attributes["shape"][0] if attributes.get("dims") else 1 for attributes in schema.values())
 
 
 def preserves_units(model):

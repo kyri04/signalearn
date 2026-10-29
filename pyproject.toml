@@ -21,6 +21,8 @@ classifiers = [
 dependencies = ["numpy>=1.26", "dask[array]>=2024.1", "matplotlib>=3.8", "scikit-learn>=1.4", "joblib>=1.2"]
 
 [project.optional-dependencies]
+torch = ["torch>=2.2"]
+tensorflow = ["tensorflow>=2.16", "keras>=3"]
 dev = ["build>=1.2", "pytest>=8"]
 docs = ["sphinx>=8.2,<9", "myst-parser>=4,<5", "pydata-sphinx-theme>=0.23,<1"]
 

@@ -6,17 +6,34 @@
 `x` is a Field, a sequence of Fields, or a Dataset. A Dataset supplies every
 field except `id`; select features explicitly to avoid including targets or
 unrelated metadata. Require non-empty input and distinct names other than `id`.
-Unnamed Fields use `x`, or `x0`, `x1`, etc. All IDs must match exactly; rows align
-to the first selected Field.
+Unnamed Fields use `x`, or `x0`, `x1`, etc. The first selected Field defines the
+samples and order. Other inputs, targets, and Field-valued parameters must cover
+those IDs; extra IDs are ignored. See [alignment](data.md#alignment).
 
-The native sklearn integration requires scalar inputs. One Field becomes one
-matrix column. Numeric missing values become NaN; categorical missing values
+Sklearn accepts scalar Fields and fixed-length, one-dimensional numeric array
+Fields. A scalar contributes one column; a vector contributes one per element.
+Selected Fields form consecutive feature blocks in fitted order. Multidimensional
+and ragged arrays require explicit reshaping, resampling, or feature extraction.
+No automatic flattening, padding, or scaling occurs.
+
+Vector dimensions, lengths, units, and feature coordinates form a fitted contract.
+Supplied coordinates must match across samples and on later applications,
+including coordinate units and scalar kinds. Referenced coordinates are read
+when checking this contract; signal values remain deferred until needed.
+Without coordinates, positions establish feature order. Internally expanded
+column names use `<field>__<index>`; collisions require explicit field renaming.
+
+Numeric missing values become NaN; categorical missing values
 remain `None`. Native code either supports them or errors. No observations are
 dropped or imputed. Integer identity is preserved during mixed column conversion.
 
 Native options belong on the component. Extra operation arguments forward to
 its native method. Field-valued arguments align by ID; raw arrays use native
 positional semantics. Ordinary parameters are copied for deferred operations.
+
+The estimator-specific rules below describe sklearn. [sl.Model](models.md) uses
+the same operations with array inputs, batch loading, and explicit training and
+output declarations.
 
 ## fit
 ```python
@@ -26,15 +43,15 @@ sl.fit(x, model, target=None, **fit_params)
 Return a fitted native copy. The component implements `get_params` and `fit`,
 with fit returning itself. Configuration is cloned, including random seeds;
 previous fitted state is not reused and the supplied instance is unchanged.
-Use `target` for a scalar, complete, exact-ID supervised target, passed as a
+Use `target` for a scalar supervised target complete for the selected IDs, passed as a
 one-dimensional native array. Passing native `y` through `fit_params` is an error.
 
 Compute selected inputs, target, and Field-valued parameters together, then call
 native fit once on the complete selected batch. This is eager and not incremental
 or out of core. No training-resumption contract is inferred.
 
-Record input names, numeric/boolean/string kinds, and units. Integer and float
-features share the numeric kind. Target metadata records its name, dtype, units,
+Record input names, numeric/boolean/string kinds, units, and vector contracts.
+Integer and float features share the numeric kind. Target metadata records its name, dtype, units,
 labels, and display preferences, without retaining target observations in that
 metadata. The native model itself may retain observations.
 
@@ -57,12 +74,22 @@ has no scientific training metadata. Fitted feature counts are checked.
 The component and ordinary parameters are snapshotted at the call. Native
 transformation executes once per joint computation over the complete selection;
 separate value accesses may recompute. Native output is real numeric, with a
-sample axis and declared column count. A vector means one column. Sample count
+sample axis and declared column count. A one-dimensional native output means one output feature. Sample count
 and order must be retained. Sparse numeric output is densified internally.
 Fields are nullable `float64`: NaNs become `None`, infinity/non-numeric values
 and integers losing float64 precision are rejected.
+Vector outputs retain floating NaNs when nullable. Array input support does not
+change sklearn's complete-matrix execution or add out-of-core training.
 
 ### Outputs
+StandardScaler, RobustScaler, and identity FunctionTransformer preserve vector
+Field structure and coordinates, including hidden coordinate dependencies.
+Do not also select those coordinate dependencies as transformed features under
+the same names; conflicting outputs are rejected rather than rebinding axes.
+Mixed scalar/vector inputs retain their separate Fields. Same-width output alone
+does not establish unchanged feature meaning; other estimators use named scalar
+output features, including `pca0`, `pca1`, etc. for PCA.
+
 Use `get_feature_names_out` when provided. An identity FunctionTransformer
 retains names. Otherwise the component must declare positive `n_features_out_`:
 names use the snake-case class plus source for one input/output, or class plus

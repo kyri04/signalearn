@@ -4,8 +4,10 @@ accept existing axes without clearing artists, and do not show/save/close them.
 Styles are scoped, preserving global rc settings and the active backend.
 
 ## Inputs
-Scalar coordinates are numeric Fields, not raw arrays or strings. Inputs need
-the same sample ID set and align to the first coordinate Field. Only selected
+Scalar coordinates are numeric Fields, not raw arrays or strings. The first
+coordinate Field defines the plotted samples; other coordinates and `by` must
+cover its IDs. Extra supporting IDs are ignored. Array line plots use the signal's
+IDs. See [alignment](data.md#alignment). Only selected
 Fields/dependencies are computed together. Category grouping is scalar and
 supports strings, booleans, integers, or floats. SampleFields are accepted where
 their shape is appropriate.

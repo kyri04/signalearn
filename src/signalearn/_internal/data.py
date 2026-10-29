@@ -235,10 +235,14 @@ def take_field(field, indices):
     return result
 
 
-def align_field(field, ids):
+def align_field(field, ids, *, allow_extra=False):
     if field.ids == ids:
         return field
-    if set(field.ids) != set(ids):
+    available, required = set(field.ids), set(ids)
+    if allow_extra and not required <= available:
+        missing = [identity for identity in ids if identity not in available]
+        raise ValueError(f"Supporting field sample IDs are missing required IDs: {missing[:5]!r}")
+    if not allow_extra and available != required:
         raise ValueError("Assigned field sample IDs must match the dataset IDs")
     locations = {value: i for i, value in enumerate(field.ids)}
     return take_field(field, [locations[value] for value in ids])

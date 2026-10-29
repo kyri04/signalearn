@@ -51,6 +51,13 @@ Every sample has a unique string ID. SignaLearn aligns fields by these IDs,
 including when rows arrive in a different order. Equal lengths alone do not
 establish that observations correspond.
 
+Supporting Fields can come from the full dataset when an operation uses a
+subset. SignaLearn selects matching IDs and rejects missing matches:
+
+```python
+sl.plot_line(recordings[:1].signal, by=recordings.subject)
+```
+
 Supply IDs when importing related data separately. Otherwise, SignaLearn
 generates them. Selection and predictions preserve IDs; new observations such
 as windows get new IDs and retain their source IDs.

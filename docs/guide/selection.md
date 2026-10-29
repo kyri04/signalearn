@@ -14,6 +14,8 @@ samples excluded earlier. Category values must match the stored values exactly.
 | Task | Call |
 | --- | --- |
 | Several categories | `sl.filter(data.subject, ["S01", "S02"])` |
+| Exclude categories | `sl.exclude(data.subject, ["S01", "S02"])` |
+| Exclude missing values | `sl.exclude(data.temperature, None)` |
 | Missing values | `sl.filter(data.temperature, None)` |
 | Custom condition | `sl.where(data.temperature, lambda x: x is not None and x > 37)` |
 | Sort | `sl.sort(data.temperature)` |

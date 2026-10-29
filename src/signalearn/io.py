@@ -10,7 +10,7 @@ from dask import compute
 from ._internal.data import dataset_dependencies, new_ids
 from ._internal.adapters import get_adapter, get_persistence_adapter
 from ._internal.array_io import array_storage, source_columns
-from ._internal.io import field_options, read_csv_columns, read_schema
+from ._internal.io import data_paths, field_options, read_csv_columns, read_schema
 from ._internal.model_io import (
     check_model_versions, model_manifest, model_payload, read_model_manifest,
     validate_model_metadata, validate_restored_model, write_model_manifest,
@@ -53,8 +53,7 @@ def load_model(path: str | PathLike[str]) -> Any:
 def load_data(
     path: str | PathLike[str], *, schema: str | PathLike[str] | None = None,
 ) -> Dataset:
-    path = Path(path)
-    schema_path = path.with_suffix(".schema.json") if schema is None else Path(schema)
+    path, schema_path = data_paths(path, schema)
     declaration = read_schema(schema_path)
     declarations = declaration["fields"] if declaration["layout"] == "rows" else declaration["sample_fields"]
     columns = read_csv_columns(path, declarations, set(declarations) | source_columns(declaration))

@@ -15,11 +15,13 @@ specifies both layouts and includes complete examples.
 ```python
 import signalearn as sl
 
-data = sl.load_data("experiment/samples.csv")
+data = sl.load_data("experiment")
 ```
 
-SignaLearn finds the schema beside the CSV. Input paths follow the working
-directory; paths inside the manifest are relative to that manifest.
+You can also supply `samples.csv`, `samples.schema.json`, or the dataset's
+`arrays/` folder. All resolve to the same dataset. Input paths follow the working
+directory and support `~`; array paths are relative to the manifest.
+See [I/O](../reference/io.md#load_data) for exact resolution rules.
 
 ## Preparation
 Define what a sample represents, its fields, units, coordinates, and any

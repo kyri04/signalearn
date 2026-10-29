@@ -66,7 +66,8 @@ def validate_model_metadata(metadata, *, encoded=False):
             raise ValueError("Model inputs must be a non-empty list or null")
         names = set()
         for field in inputs:
-            if not isinstance(field, Mapping) or set(field) != {"name", "kind", "unit"}:
+            if (not isinstance(field, Mapping) or not {"name", "kind", "unit"} <= field.keys()
+                    or field.keys() - {"name", "kind", "unit", "vector"}):
                 raise ValueError("Each model input requires name, kind, and unit")
             if not isinstance(field["name"], str) or not field["name"] or field["name"] in names:
                 raise ValueError("Model input field names must be non-empty and unique")
@@ -74,9 +75,30 @@ def validate_model_metadata(metadata, *, encoded=False):
                 raise ValueError("Model input logical kind is unsupported")
             if field["unit"] is not None and not isinstance(field["unit"], str):
                 raise ValueError("Model input units must be strings or null")
+            if "vector" in field:
+                validate_vector_metadata(field["vector"])
             names.add(field["name"])
         inputs = [dict(field) for field in inputs]
     return {"inputs": inputs, "target": target_metadata(metadata["target"], encoded=encoded)}
+
+
+def validate_vector_metadata(vector):
+    from .data import validate_block
+
+    if not isinstance(vector, Mapping) or set(vector) != {"dim", "size", "coords"}:
+        raise ValueError("Vector feature metadata requires dim, size, and coords")
+    if not isinstance(vector["dim"], str) or not vector["dim"] or type(vector["size"]) is not int or vector["size"] < 1:
+        raise ValueError("Vector feature dimensions and sizes are invalid")
+    coords = vector["coords"]
+    if coords is not None:
+        if not isinstance(coords, Mapping) or set(coords) != {"values", "dtype", "unit"}:
+            raise ValueError("Vector feature coordinates require values, dtype, and unit")
+        if not isinstance(coords["values"], list) or len(coords["values"]) != vector["size"]:
+            raise ValueError("Vector feature coordinates must match the feature width")
+        if (not isinstance(coords["dtype"], str) or coords["dtype"] not in DTYPES
+                or coords["unit"] is not None and not isinstance(coords["unit"], str)):
+            raise ValueError("Vector feature coordinate types or units are invalid")
+        validate_block(np.asarray(coords["values"], dtype=object), logical_dtype=coords["dtype"], nullable=False)
 
 
 def encoded_metadata(metadata):

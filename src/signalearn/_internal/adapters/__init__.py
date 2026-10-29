@@ -1,5 +1,12 @@
 def get_adapter(model, operation):
+    from ...components import Model
     from . import component, sklearn
+
+    if isinstance(model, Model):
+        from ..models import configure_model
+        from . import tensorflow, torch
+
+        return torch if configure_model(model) == "torch" else tensorflow
 
     if component.supports(model):
         if operation == "save_model":
@@ -16,8 +23,10 @@ def get_adapter(model, operation):
 
 
 def get_persistence_adapter(name):
-    from . import sklearn
+    from . import sklearn, tensorflow, torch
 
     if name == sklearn.persistence_name:
         return sklearn
+    if name in {torch.persistence_name, tensorflow.persistence_name}:
+        return torch if name == torch.persistence_name else tensorflow
     raise ValueError(f"No persistence integration supports adapter {name!r}")

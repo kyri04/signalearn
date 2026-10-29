@@ -20,7 +20,7 @@ def crossval_inputs(splits, procedure, target):
         if not isinstance(target, Field):
             raise TypeError("target must be a SignaLearn Field")
         require_scalar(target, "Cross-validation reference target")
-        target = align_field(target, splits.data.ids)
+        target = align_field(target, splits.data.ids, allow_extra=True)
     rows = tuple(index for _, test in splits.indices for index in test)
     repeated = len(set(rows)) != len(rows)
     ids = new_ids(len(rows)) if repeated else tuple(splits.data.ids[index] for index in rows)

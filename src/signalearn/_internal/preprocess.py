@@ -58,7 +58,7 @@ def fold_fields(data, target, group):
             if not isinstance(field, Field):
                 raise TypeError(f"{name} must be a SignaLearn Field")
             require_scalar(field, f"Fold {name}")
-            field = align_field(field, data.ids)
+            field = align_field(field, data.ids, allow_extra=True)
         fields.append(field)
     return tuple(fields)
 
@@ -120,7 +120,7 @@ def validate_split(data, sizes, group, seed, shuffle):
 def split_units(data, group):
     if group is None:
         return np.arange(len(data)), len(data)
-    values = materialise_values(align_field(group, data.ids))
+    values = materialise_values(align_field(group, data.ids, allow_extra=True))
     if any(value is None for value in values):
         raise ValueError("Split grouping values must not be missing")
     categories = {value: index for index, value in enumerate(dict.fromkeys(values))}
@@ -160,7 +160,7 @@ def component_input_scalar(value):
 def component_tasks(adapter, model, fields, names, parameters, ids, schema):
     from ..data import Field
 
-    options = {name: align_field(value, ids) if isinstance(value, Field) else deepcopy(value)
+    options = {name: align_field(value, ids, allow_extra=True) if isinstance(value, Field) else deepcopy(value)
                for name, value in parameters.items()}
     batch = model.signalearn_mode == "batch"
     indices = (None,) if batch else range(len(ids))
@@ -233,13 +233,13 @@ def selection_source(x):
     return dataset[[locations[identity] for identity in x.ids]]
 
 
-def matching_values(x, value):
-    require_scalar(x, "filter")
+def matching_values(x, value, *, operation="filter"):
+    require_scalar(x, operation)
     if isinstance(value, np.ndarray) and value.ndim == 0:
         value = value.item()
     if isinstance(value, (list, tuple, set, frozenset, np.ndarray)):
         if isinstance(value, np.ndarray) and value.ndim != 1:
-            raise ValueError("Filter values must be scalars or a one-dimensional collection")
+            raise ValueError(f"{operation.capitalize()} values must be scalars or a one-dimensional collection")
         values = list(value)
     else:
         values = [value]

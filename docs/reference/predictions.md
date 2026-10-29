@@ -7,12 +7,17 @@ optional `output` selects a scientifically different result where supported:
 | `"probabilities"` | `<target>_probability` | One class vector per sample. |
 | `"scores"`, binary | `<target>_score` | Signed margin. |
 | `"scores"`, multiclass | `<target>_score` | Per-class score vector. |
+| `"logits"` | `<target>_logit` | Per-class logit vector. |
+
+Sklearn exposes probabilities or scores when its native methods support them.
+[sl.Model](models.md) exposes probabilities and explicitly declared logits.
+Decision scores are not inferred from logits.
 
 An external/unnamed/id target uses the base `prediction`. IDs and current sample
-order are preserved. Probability/score values are finite non-nullable float64
-and do not inherit target units. Series colour/marker may be retained; category
-display belongs to the class representation. Native `classes_` determines class
-order, rather than numeric column indices or predicted labels.
+order are preserved. Probability, score, and logit values are finite non-nullable
+float64 and do not inherit target units. Series colour/marker may be retained; category
+display belongs to the class representation. Class order follows sklearn
+`classes_` or the explicit `sl.Model.classes` declaration, preserving label types.
 
 For example, with a fitted digit classifier:
 
@@ -28,15 +33,25 @@ sample's value has shape `(classes,)`. Binary scores retain both classes and
 Positive values point towards that class. Scores are labelled `decision_scores`,
 not probabilities or logits.
 
+## Decisions
+Sklearn preserves native label decisions, even when they differ from probability
+argmax. `sl.Model` uses argmax over its declared classes, choosing the first
+class in a tie. Training encodes these classes to indices; prediction restores
+the original labels.
+
+For `sl.Model(output="logits")`, requesting probabilities applies softmax.
+Declared probabilities are validated without correction. Regression returns
+finite float64 values with target units. Class-label predictions retain target
+display metadata; probabilities, scores, and logits do not inherit target units.
+
 ## Constraints
-Check native method availability before consuming data. Unsupported outputs,
-native multilabel/multioutput tasks, and multiclass one-vs-one pair scores are
-rejected. Pairwise columns need a separate class-pair representation. Invalid
-returned shape, sample count, missing/masked/infinite values, probabilities
+Check output availability before consuming data. Native multilabel/multioutput
+tasks and multiclass one-vs-one pair scores are rejected. `sl.Model` also rejects
+scalar binary logits and structured classification outputs. Pairwise columns
+need a separate class-pair representation. Invalid returned shape, sample count, missing/masked/infinite values, probabilities
 outside [0,1], or incompatible classes error when consumed. Exclusive vectors
-must sum to one within `rtol=1e-6, atol=1e-8`. Values are not clipped,
-renormalised, calibrated, or softmaxed. Native label prediction is retained even
-when its decision differs from probability argmax.
+must sum to one within `rtol=1e-6, atol=1e-8`. Declared probabilities are not
+clipped, renormalised, or calibrated.
 
 Prediction metadata is read-only and survives selection, assignment,
 concatenation, cross-validation, and save/load. Equivalent class columns align

@@ -7,11 +7,26 @@ Defined in `signalearn.io`. Figure saving is specified under
 sl.load_data(path, *, schema=None)
 ```
 
-Return a Dataset from a local CSV table/manifest and version-1 schema. With no
-schema argument, replace the CSV suffix with `.schema.json` beside the CSV.
-Both explicit paths follow the process's working directory. Only local CSV
-and documented `rows`/`arrays` layouts are supported; there is no directory
-search, schema-dictionary input, inferred target, or implicit data cleaning.
+Return a Dataset from a local CSV table/manifest and version-1 schema.
+
+| Supplied path | Entry files |
+| --- | --- |
+| Dataset folder | Its `samples.csv` and `samples.schema.json`. |
+| Its `arrays/` folder | The pair in its immediate parent. |
+| CSV | Matching `.schema.json` beside it. |
+| `.schema.json` | Matching CSV beside it. |
+
+A folder named `arrays` uses its own standard entry files if either is present;
+otherwise it uses its immediate parent. Missing required files raise
+FileNotFoundError with their paths. No recursive search or alternate-pair
+selection occurs.
+
+`schema=` overrides the schema for a CSV or folder; supplying it alongside a
+schema-file entry raises ValueError. Explicit paths follow the working directory
+and expand `~`. Array paths remain relative to the resolved CSV. Custom basenames
+work through explicit CSV/schema paths; folders require the standard filenames.
+Only prepared `rows`/`arrays` layouts are supported. Raw files, arbitrary JSON
+entries, schema dictionaries, inferred targets, and implicit cleaning are unsupported.
 
 CSV cells are parsed/validated eagerly. Array references and available headers
 are checked eagerly, while numeric payloads remain deferred. NPY reads use
@@ -63,31 +78,42 @@ sl.load_model(path)
 ```
 
 Save returns the absolute new directory Path. Load accepts that directory and
-returns the original native component type with fitted state and recorded
+returns the estimator or `sl.Model` with fitted state and recorded
 SignaLearn metadata, without fitting/applying it. Save leaves its supplied
 instance unchanged. Path handling, existing-destination rejection, staging, and
 failure cleanup follow dataset saving.
 
-### Support
-The current persistence adapter supports sklearn-compatible components exposing
-get_params/fit, including supported native composition and importable custom
-estimators. Learned components must be fitted; native stateless components can
-be saved without unnecessary fitting. Externally fitted components are allowed;
-unknown scientific metadata remains unknown. The custom `signalearn_mode`
-transform contract and native PyTorch/Keras persistence are not implemented.
+### Formats
+Sklearn-compatible estimators support native composition and importable custom
+estimators. Learned components must be fitted; stateless components need no
+unnecessary fitting. Externally fitted estimators are allowed, with unknown
+scientific metadata left unknown. `sl.Model` supports native PyTorch and Keras
+artifacts. The custom `signalearn_mode` contract has no persistence integration.
 Unsupported objects are rejected rather than arbitrarily pickled.
 
-```text
-classifier/
-├── model.json
-└── model.joblib
-```
+| Component | Native payload | Additional files |
+| --- | --- | --- |
+| Sklearn estimator | `model.joblib` | `model.json` |
+| PyTorch `sl.Model` | `model.pt` state dictionary | `model.json`, `component.json` |
+| Keras `sl.Model` | `model.keras` | `model.json`, `component.json` |
 
-The native payload is Joblib using pickle protocol 5. The manifest is version 1,
-kind `signalearn.model`, adapter `sklearn`, format `joblib`, with a fixed payload
-name, component module/qualified name, dependency versions, and metadata.
-Only known adapters are selected; arbitrary filesystem adapter imports are not
-allowed. Share the entire directory.
+Share the entire directory. The version-1 `signalearn.model` manifest records
+adapter, format, fixed payload name, component type, versions, and scientific
+metadata. Only known adapters are selected; filesystem adapter imports are not
+allowed. Sklearn uses Joblib with pickle protocol 5.
+
+### Neural models
+PyTorch requires an importable architecture `factory` and JSON-compatible
+`factory_params` on `sl.Model`. Loading constructs the architecture and restores
+its state dictionary using weights-only deserialization. The network object is
+not pickled. Keras uses native `.keras` serialization and safe-mode loading;
+custom objects must be available through Keras serialization.
+
+`component.json` records input/output declarations and fitted input constraints.
+Declarations must be JSON serializable. Loading restores an `sl.Model` with
+inference weights on CPU. Artifacts do not embed preprocessing, custom source,
+or trainers. Keras may store optimiser state in its native file, but SignaLearn
+does not provide a training-resumption contract.
 
 ### Metadata
 The manifest is authoritative. Input metadata records names, logical kinds, and
@@ -96,6 +122,11 @@ formatted attributes, colours, and markers. Unknown entries are null. Category
 maps use typed category/display pairs, preserving booleans and large integers;
 NumPy scalar keys become Python scalars.
 
+Sklearn vector inputs additionally record their dimension, width, and optional
+feature-coordinate values, kinds, and units in each input's `vector` entry.
+These constraints are restored from the manifest and checked when applying the
+model. Externally fitted models have no inferred scientific feature contract.
+
 The native sklearn payload excludes `_signalearn_inputs` and `_signalearn_target`;
 loading restores them from validated metadata. Native configuration, learned
 state, and classes remain in the payload, potentially including retained
@@ -103,22 +134,24 @@ training observations. The artifact does not embed a notebook or preparation
 code. Preprocessing and prediction components remain separate reusable objects.
 
 ### Compatibility
-Record Python, SignaLearn, sklearn, NumPy, SciPy, and Joblib versions, plus an
-installed distribution owning a non-sklearn top-level class when discoverable.
+Record Python, SignaLearn, and the adapter's dependencies: sklearn/NumPy/SciPy/
+Joblib, PyTorch/NumPy/Dask, or TensorFlow/Keras/NumPy/Dask. Sklearn custom top-level
+classes also record their owning installed distribution when discoverable.
 Require the same Python major/minor and exact recorded dependencies other than
 SignaLearn. Python patch differences are permitted; the artifact format version
 interprets SignaLearn metadata. Unknown versions, missing dependencies, invalid
 metadata, or incompatible dependencies fail before native deserialization.
 This is not an environment installer or complete custom-code lockfile.
 
-Custom classes/functions must resolve from importable modules available when
-loading. Put them in the workspace extension package. Source is not embedded;
-notebook definitions, lambdas, local definitions, and renamed/missing modules
+Sklearn custom definitions and PyTorch architecture factories must resolve from
+importable modules available when loading. Put them in the workspace extension
+package. Source is not embedded; notebook definitions, lambdas, local definitions, and renamed/missing modules
 are unsupported. Save validation checks importability, including referenced
 custom callable parameters.
 
-**Load artifacts only from trusted sources.** Joblib uses pickle machinery;
-manifest and version checks do not make an untrusted payload safe. See the
+**Load artifacts only from trusted sources.** Joblib uses pickle machinery, and
+architecture factories execute code. Manifest checks and native loading modes
+do not make untrusted artifacts safe. See the
 [native persistence guidance](https://scikit-learn.org/stable/model_persistence.html).
 
 These artifacts support analysis/inference in compatible Python environments.

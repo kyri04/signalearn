@@ -29,6 +29,8 @@ measurements. The old `recordings` layout name is unsupported.
 
 Both layouts require a schema, including a simple scalar table.
 `sl.load_data("samples.csv")` reads `samples.schema.json` alongside it.
+The dataset folder, its `arrays/` folder, and the `.schema.json` file are also
+accepted entry points; see [path resolution](io.md#load_data).
 Use `sl.load_data("samples.csv", schema="other.schema.json")` to select a
 different schema file. Supplying a schema dictionary directly is not supported.
 The prepared filename convention does not restrict the importer: an explicitly

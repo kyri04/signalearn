@@ -16,8 +16,7 @@ def fit(
     adapter = get_adapter(model, "fit")
     validate_fit_parameters(fit_params)
     fields, names, ids = selected_fields(x)
-    matrix, labels, parameters = model_inputs(fields, target, fit_params, ids).compute()
-    return adapter.fit_model(model, matrix, labels, parameters, fields, names, target)
+    return adapter.fit_fields(model, fields, names, target, fit_params, ids)
 
 
 def predict(
@@ -29,6 +28,8 @@ def predict(
     fields, names, ids = selected_fields(x)
     fields, names = adapter.fitted_inputs(model, fields, names)
     schema = adapter.prediction_schema(model, output)
+    if getattr(adapter, "batched", False):
+        return adapter.deferred_output(model, fields, names, ids, schema, output, predict_params)
     inputs = model_inputs(fields, None, predict_params, ids, snapshot=True)
     result = deferred_prediction(adapter, model, inputs, len(ids), schema, output)
     return output_dataset(result, schema, ids)

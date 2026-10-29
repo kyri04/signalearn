@@ -18,10 +18,6 @@ Import with `import signalearn as sl`.
 ## Documentation
 [Read the documentation](https://kyri04.github.io/signalearn/).
 
-- [Guide](https://kyri04.github.io/signalearn/guide/index.html): data and analysis workflows.
-- [Reference](https://kyri04.github.io/signalearn/reference/index.html): APIs and formats.
-- [Extensions](https://kyri04.github.io/signalearn/extensions/index.html): agents, components, and adapters.
-
 ## Licence
 SignaLearn is available under the [MIT licence](LICENSE).
 

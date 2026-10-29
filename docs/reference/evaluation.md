@@ -4,8 +4,9 @@ Defined in `signalearn.evaluation`. For workflows, see
 
 ## Inputs
 Metrics take a prediction Field, or Dataset with exactly one non-ID Field,
-then a target Field. Require the same non-empty ID set, aligning target rows
-automatically. Inputs are scalar, complete, and have exactly matching units.
+then a target Field. Prediction IDs select target rows automatically; targets
+may contain extra IDs but must cover every prediction. See [alignment](data.md#alignment).
+Selected inputs are non-empty, scalar, complete, and have exactly matching units.
 String, boolean, integer, and float labels are supported; numeric labels compare
 exactly without converting booleans to integers or rounding large integers.
 Regression requires numeric Fields. Arrays, multiple outputs, probability/score
@@ -84,9 +85,9 @@ warns and returns NaN for perfect predictions or negative infinity otherwise,
 following the mathematical behaviour of sklearn `force_finite=False`.
 
 ## Groups
-Every metric accepts optional `by`, a scalar complete Field with the exact
-prediction IDs. Targets and groups are aligned; missing values or ID subsets/
-supersets are errors. Shared inputs are computed together once before groups
+Every metric accepts optional `by`, a scalar Field covering all prediction IDs.
+Extra target/group IDs are ignored; missing required IDs or selected missing
+values raise errors. Shared inputs are computed together once before groups
 are scored independently. Class unions and undefined-score rules apply within
 each group, rather than importing other groups' categories.
 
@@ -134,7 +135,8 @@ prediction rows get new event IDs and follow split then native test order.
 No averaging or deduplication occurs. The native splitter determines repeat
 structure; folds are indexed in its supplied order.
 
-Optional `target` is a complete scalar exact-ID input Field. Its held-out values
+Optional `target` is a scalar Field complete for all split-data IDs; extra IDs
+are ignored. Its held-out values
 become `<target>_target`, with an automatic suffix on collision. This reference
 preserves metadata and is repeated with prediction events. It does not select
 the procedure's training target. Use reference Fields to evaluate partial or

@@ -2,6 +2,19 @@
 Public objects are defined in `signalearn.data`. They retain sample identity
 and interpretation; their public `.values` interface returns NumPy values.
 
+## Alignment
+Operations select supporting Fields by the primary input's sample IDs and
+preserve its order. Extra supporting IDs are ignored; missing required IDs raise
+an error. This applies to grouping, targets, sample weights, and other Field-valued
+parameters. Matching never uses row positions or silently intersects ID sets.
+
+Learning uses the first selected input Field; metrics use predictions. Scalar
+plots use their first coordinate Field; array line plots use the signal Field.
+Splitting and fold planning use the supplied Dataset. Dataset construction and
+assignment require exact ID sets, as do cross-validation procedure results.
+New IDs from windows or repeated predictions need their explicit source mapping;
+alignment does not substitute source IDs automatically.
+
 ## Dataset
 ```python
 sl.Dataset(fields, *, ids=None)

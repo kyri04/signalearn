@@ -57,12 +57,12 @@ def numeric_plot_values(fields, by, *, keep_missing=False):
         if field.dtype not in {"int64", "float64"}:
             raise TypeError(f"{name} must be a numeric field")
     anchor = next(iter(fields.values()))
-    aligned = [align_field(field, anchor.ids) for field in fields.values()]
+    aligned = [align_field(field, anchor.ids, allow_extra=True) for field in fields.values()]
     if by is not None:
         if not isinstance(by, Field):
             raise TypeError("by must be a SignaLearn Field")
         require_scalar(by, "Plot grouping")
-        aligned.append(align_field(by, anchor.ids))
+        aligned.append(align_field(by, anchor.ids, allow_extra=True))
     arrays = compute(*(field._values for field in aligned))
     valid = np.array([all(value is not None for value in row)
                       for row in zip(*arrays[:len(fields)])], dtype=bool)
@@ -212,7 +212,7 @@ def plot_groups(by, ids):
         return None
     plot_field(by, "by")
     require_scalar(by, "Plot grouping")
-    return align_field(by, ids)
+    return align_field(by, ids, allow_extra=True)
 
 
 def line_data(x, y, by):
@@ -231,7 +231,7 @@ def line_data(x, y, by):
     dim = y.dims[0]
     if x is not None:
         plot_field(x, "x")
-        x = align_field(x, y.ids)
+        x = align_field(x, y.ids, allow_extra=True)
         if x.dims != y.dims or np.dtype(x.dtype).kind not in "iuf":
             raise ValueError("Array line coordinates must have the same named dimension as y")
     else:

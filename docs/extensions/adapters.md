@@ -8,13 +8,15 @@ internally. Configure native options on the component.
 | --- | --- |
 | sklearn-compatible estimator | Fit, transform, predict, save/load. |
 | Declared custom transformation | Transform. |
+| `sl.Model` | Batched fit, transform, predict, save/load. |
 
 An operation is available only when the component implements its supported
 native method.
 
-Sklearn learning currently accepts scalar features and a single target. Native
-PyTorch and TensorFlow integrations are not implemented. A placeholder file or
-custom wrapper does not provide an integration by itself.
+Sklearn learning accepts scalar and fixed-length vector features with a single
+scalar target. PyTorch and
+TensorFlow/Keras use [sl.Model](../reference/models.md),
+supporting fixed-shape numeric samples and a single scalar target.
 
 ## Responsibilities
 Adapters handle native input/output conversion, state, metadata, and supported

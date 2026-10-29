@@ -27,7 +27,7 @@ def selected_fields(x):
                   for index, field in enumerate(fields))
     if len(set(names)) != len(names) or "id" in names:
         raise ValueError("Model input fields must have distinct names other than 'id'")
-    return tuple(align_field(field, ids) for field in fields), names, ids
+    return tuple(align_field(field, ids, allow_extra=True) for field in fields), names, ids
 
 
 def native_column(values, dtype):
@@ -42,19 +42,26 @@ def native_column(values, dtype):
     return np.asarray(values, dtype=object)
 
 
-def native_matrix(arrays, dtypes):
-    columns = [native_column(values, dtype) for values, dtype in zip(arrays, dtypes)]
+def native_matrix(arrays, dtypes, vectors=None):
+    vectors = vectors or (False,) * len(arrays)
+    columns = [np.stack(values) if vector else native_column(values, dtype).reshape(-1, 1)
+               for values, dtype, vector in zip(arrays, dtypes, vectors)]
     if len({column.dtype for column in columns}) == 1 and all(column.dtype.kind in "biuf" for column in columns):
         return np.column_stack(columns)
-    matrix = np.empty((len(columns[0]), len(columns)), dtype=object)
-    for index, column in enumerate(columns):
-        matrix[:, index] = column
+    matrix = np.empty((len(columns[0]), sum(column.shape[1] for column in columns)), dtype=object)
+    start = 0
+    for column in columns:
+        matrix[:, start:start + column.shape[1]] = column
+        start += column.shape[1]
     return matrix
 
 
 def model_inputs(fields, target, parameters, ids, *, snapshot=False):
+    from .features import feature_width
+    from .tensor import batch_task
+
     for field in fields:
-        require_scalar(field, "Tabular model input conversion")
+        feature_width(field)
     count = len(fields)
     fields = list(fields)
     target_index = None
@@ -63,22 +70,22 @@ def model_inputs(fields, target, parameters, ids, *, snapshot=False):
             raise TypeError("target must be a SignaLearn Field")
         require_scalar(target, "Tabular model targets")
         target_index = len(fields)
-        fields.append(align_field(target, ids))
+        fields.append(align_field(target, ids, allow_extra=True))
     columns, options = {}, {}
     for name, value in parameters.items():
         if isinstance(value, Field):
             require_scalar(value, f"Native parameter {name!r}")
             columns[name] = len(fields)
-            fields.append(align_field(value, ids))
+            fields.append(align_field(value, ids, allow_extra=True))
         else:
             options[name] = deepcopy(value) if snapshot else value
-    return delayed(native_inputs)([field._values for field in fields],
+    return delayed(native_inputs)([batch_task(field, tuple(range(len(field)))) if field.dims else field._values for field in fields],
                                   [field.dtype for field in fields], count,
-                                  target_index, columns, options)
+                                  target_index, columns, options, [bool(field.dims) for field in fields[:count]])
 
 
-def native_inputs(arrays, dtypes, count, target_index, columns, options):
-    matrix = native_matrix(arrays[:count], dtypes[:count])
+def native_inputs(arrays, dtypes, count, target_index, columns, options, vectors=None):
+    matrix = native_matrix(arrays[:count], dtypes[:count], vectors)
     target = None if target_index is None else native_target(arrays[target_index], dtypes[target_index])
     parameters = dict(options)
     for name, index in columns.items():

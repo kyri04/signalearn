@@ -18,7 +18,10 @@ def fitted_inputs(model, fields, names):
         raise ValueError("signalearn_mode must be 'sample' or 'batch'")
     if not callable(getattr(model, "transform", None)) or not callable(getattr(model, "signalearn_outputs", None)):
         raise TypeError("Custom components require transform and signalearn_outputs methods")
-    declarations = getattr(model, "signalearn_inputs", None)
+    return declared_inputs(getattr(model, "signalearn_inputs", None), fields, names)
+
+
+def declared_inputs(declarations, fields, names):
     if not isinstance(declarations, Mapping) or not declarations or set(declarations) != set(names):
         raise ValueError("signalearn_inputs must declare exactly the selected input field names")
     lookup = dict(zip(names, fields))

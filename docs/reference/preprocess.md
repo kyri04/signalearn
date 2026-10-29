@@ -22,6 +22,17 @@ valid empty Dataset; an empty request returns one without computing x.
 Integers require integer matches; float Fields accept numeric matches;
 strings/booleans are not coerced. Only x is computed.
 
+## exclude
+```python
+sl.exclude(x, value)
+```
+
+Keep samples whose scalar `x` does not match `value`, using the same matching
+rules as `filter`. Accept one value or a collection. Missing values remain unless
+`None` is explicitly excluded. Preserve order, IDs, metadata, and current Dataset
+context. An empty exclusion returns all selected samples without computing x;
+excluding every value returns an empty Dataset. Only x is computed.
+
 ## between
 ```python
 sl.between(x, lower=None, upper=None)
@@ -88,7 +99,8 @@ Shuffling randomises assignment with an optional non-negative integer seed.
 Without shuffling, use existing order and omit seed. No target, timestamps, or
 stratification are inferred. Ordinary splitting reads no values.
 
-`group` is a scalar complete Field with the exact ID set, aligned automatically.
+`group` is a scalar Field complete for the supplied Dataset's IDs. Extra IDs are
+ignored and values align automatically.
 Groups remain entirely within one partition. Proportions apply to distinct
 group counts, so row proportions can differ. Without shuffling, groups follow
 first appearance. Only group values are read.
@@ -189,7 +201,8 @@ Samples may be tested several times or never.
 
 `folds` copies a native splitter exposing `split(X, y=None, groups=None)` and
 supplies an empty matrix with the right sample count. Only explicit scalar,
-complete, exact-ID target/group Fields are computed and aligned. Splitters can
+target/group Fields complete for the supplied Dataset's IDs are computed and
+aligned; extra IDs are ignored. Splitters can
 use counts, order, labels, or groups. Feature-dependent selection needs a
 dedicated integration or explicit `Folds` indices. A supplied group must remain
 disjoint between train and test, even if the splitter ignores it. Native

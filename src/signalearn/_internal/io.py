@@ -11,6 +11,32 @@ _INTEGER = re.compile(r"[+-]?[0-9]+\Z")
 _FLOAT = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
 
 
+def data_paths(path, schema=None):
+    path = Path(path).expanduser()
+    if not path.exists():
+        raise FileNotFoundError(f"Dataset path does not exist: {path}")
+    if path.is_dir():
+        if path.name == "arrays" and not any((path / name).exists() for name in ("samples.csv", "samples.schema.json")):
+            path = path.parent
+        path = path / "samples.csv"
+        schema_path = path.with_suffix(".schema.json")
+    elif path.name.endswith(".schema.json"):
+        if schema is not None:
+            raise ValueError("A schema file was supplied twice; use schema= with a CSV or dataset folder")
+        schema_path = path
+        path = path.with_name(path.name[:-len(".schema.json")] + ".csv")
+    elif path.suffix.lower() == ".csv":
+        schema_path = path.with_suffix(".schema.json")
+    else:
+        raise ValueError("load_data expects a dataset folder, its arrays folder, a CSV, or a .schema.json file")
+    if schema is not None:
+        schema_path = Path(schema).expanduser()
+    missing = [str(item) for item in (path, schema_path) if not item.is_file()]
+    if missing:
+        raise FileNotFoundError("Missing required dataset file(s): " + ", ".join(missing))
+    return path, schema_path
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:

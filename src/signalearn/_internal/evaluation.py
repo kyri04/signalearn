@@ -32,7 +32,7 @@ def metric_fields(predictions, target, operation, *, numeric=False):
         raise ValueError("Prediction and target labels must have compatible logical dtypes")
     if predictions.unit != target.unit:
         raise ValueError("Prediction and target units must match; no unit conversion is inferred")
-    return predictions, align_field(target, predictions.ids)
+    return predictions, align_field(target, predictions.ids, allow_extra=True)
 
 
 def validate_metric_values(predictions, target, operation):
@@ -64,7 +64,7 @@ def metric_groups(predictions, target, by, operation, *, numeric=False, classifi
     if not isinstance(by, Field):
         raise TypeError("by must be a SignaLearn Field")
     require_scalar(by, "Evaluation grouping")
-    by = align_field(by, predictions.ids)
+    by = align_field(by, predictions.ids, allow_extra=True)
     predicted, expected, values = compute(predictions._values, target._values, by._values)
     validate_metric_values(predicted, expected, operation)
     if any(value is None for value in values):
